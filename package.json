@@ -1,0 +1,20 @@
+{
+  "name": "signature-realty-os",
+  "version": "1.0.0",
+  "description": "Signature Realty OS - Real Estate Brokerage Operating System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "real-estate",
+    "brokerage",
+    "crm"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "playwright": "^1.62.1"
+  }
+}

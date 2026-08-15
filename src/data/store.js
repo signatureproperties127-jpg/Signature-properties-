@@ -1,0 +1,127 @@
+const { modelSchema, formRegistry } = require('./schema');
+
+const starterSeed = {
+  users: [
+    { UserID: 'USR-0001', Name: 'System Admin', Mobile: '+910000000001', Role: 'ADMIN', Email: 'admin@sig.realty', Status: 'Active', Permissions: ['*'], CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' },
+    { UserID: 'USR-0002', Name: 'Team Manager', Mobile: '+910000000002', Role: 'MANAGER', Email: 'manager@sig.realty', Status: 'Active', Permissions: [], CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' },
+    { UserID: 'USR-0003', Name: 'Field Agent', Mobile: '+910000000003', Role: 'AGENT', Email: 'agent@sig.realty', Status: 'Active', Permissions: [], CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' }
+  ],
+  leads: [
+    {
+      LeadID: 'LEAD-0001',
+      ClientName: 'Rohan Verma',
+      City: 'Bengaluru',
+      Phone: '+91 98765 43210',
+      Email: 'rohan.v@example.com',
+      LeadStatus: 'Active',
+      AssignedAgentID: 'USR-0001',
+      CreatedAt: '2026-05-01',
+      UpdatedAt: '2026-06-01',
+      ArchiveFlag: false
+    },
+    {
+      LeadID: 'LEAD-0002',
+      ClientName: 'Meera Iyer',
+      City: 'Mumbai',
+      Phone: '+91 98220 11888',
+      Email: 'meera.i@example.com',
+      LeadStatus: 'New',
+      AssignedAgentID: 'USR-0002',
+      CreatedAt: '2026-06-02',
+      UpdatedAt: '2026-06-02',
+      ArchiveFlag: false
+    }
+  ],
+  transactions: [
+    { TransactionID: 'TXN-0001', LeadID: 'LEAD-0001', Type: 'Purchase', Status: 'Negotiation', UpdatedAt: '2026-06-02' },
+    { TransactionID: 'TXN-0002', LeadID: 'LEAD-0001', Type: 'Rent Out', Status: 'Draft', UpdatedAt: '2026-06-02' },
+    { TransactionID: 'TXN-0003', LeadID: 'LEAD-0002', Type: 'Rent', Status: 'Shortlisted', UpdatedAt: '2026-06-02' }
+  ],
+  requirements: [
+    {
+      RequirementID: 'REQ-0001', RequirementCode: 'REQ-0001', LeadID: 'LEAD-0001', TransactionID: 'TXN-0001', Category: 'Residential', SubCategory: 'BHK', PropertyType: 'Apartment', BudgetMin: 17000000, BudgetMax: 20000000, Location1: 'Bengaluru East', Location2: 'Indiranagar', Location3: null, Possession: 'Ready', Urgency: 'High', SpecialNotes: 'Need 2BHK with flexible parking', Status: 'Active', CreatedAt: '2026-06-01', UpdatedAt: '2026-06-02'
+    }
+  ],
+  inventory: [
+    { PropertyID: 'PROP-0001', Category: 'Residential', SubCategory: 'Apartment', PropertyType: 'Apartment', Project: 'Azure Crest', Location: 'Bengaluru East', Area: 1450, Price: 11200000, Status: 'Available', OwnerID: 'OWN-1001', BrokerID: 'BRO-001', BuilderID: 'BUIL-101' },
+    { PropertyID: 'PROP-0002', Category: 'Residential', SubCategory: 'Apartment', PropertyType: 'Apartment', Project: 'Emerald Grande', Location: 'Whitefield', Area: 1900, Price: 14200000, Status: 'Shortlisted', OwnerID: 'OWN-1002', BrokerID: 'BRO-002', BuilderID: 'BUIL-112' }
+  ],
+  roles: [
+    { RoleID: 'ROLE-ADMIN', Name: 'ADMIN', Description: 'Full system access', Permissions: ['*'], Status: 'Active', SystemRole: true, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' },
+    { RoleID: 'ROLE-MANAGER', Name: 'MANAGER', Description: 'Business and team oversight', Permissions: ['ADMIN_VIEW', 'REPORTS_VIEW', 'REPORTS_EXPORT', 'LEADS_VIEW', 'LEADS_CREATE', 'LEADS_EDIT', 'REQUIREMENTS_VIEW', 'REQUIREMENTS_CREATE', 'REQUIREMENTS_EDIT', 'INVENTORY_VIEW', 'MATCHING_VIEW', 'SHORTLIST_VIEW', 'SITE_VISIT_VIEW', 'NEGOTIATION_VIEW', 'TOKEN_VIEW', 'DEAL_VIEW', 'COMMISSION_VIEW', 'CLOSING_VIEW', 'AUDIT_VIEW'], Status: 'Active', SystemRole: true, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' },
+    { RoleID: 'ROLE-AGENT', Name: 'AGENT', Description: 'Operational access', Permissions: ['LEADS_VIEW', 'LEADS_CREATE', 'LEADS_EDIT', 'REQUIREMENTS_VIEW', 'REQUIREMENTS_CREATE', 'REQUIREMENTS_EDIT', 'INVENTORY_VIEW', 'MATCHING_VIEW', 'SHORTLIST_VIEW', 'SITE_VISIT_VIEW', 'NEGOTIATION_VIEW', 'TOKEN_VIEW', 'DEAL_VIEW', 'REPORTS_VIEW'], Status: 'Active', SystemRole: true, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' }
+  ],
+  settings: {
+    SettingsID: 'SETTINGS-DEFAULT',
+    Key: 'global',
+    Value: {
+      CompanyName: 'Signature Realty',
+      ApplicationName: 'Signature Realty OS',
+      Timezone: 'Asia/Kolkata',
+      DateFormat: 'YYYY-MM-DD',
+      Currency: 'INR',
+      DefaultCountry: 'India',
+      DefaultState: 'Karnataka',
+      DefaultCity: 'Bengaluru',
+      DefaultPageSize: 25,
+      SessionTimeoutMinutes: 60,
+      CacheDurationMinutes: 15,
+      ConfigurationVersion: 1,
+      NotificationSettings: {
+        InApp: true,
+        Email: false,
+        WhatsApp: false
+      },
+      Security: {
+        SessionTimeoutMinutes: 60,
+        LoginAttemptLimit: 5,
+        LockoutDurationMinutes: 15
+      },
+      Business: {
+        DefaultBrokeragePercent: 2,
+        DefaultCommissionPercent: 2,
+        HotLeadThreshold: 75,
+        LeadScoringThreshold: 60,
+        TokenRules: { RequiredForAgreement: true },
+        DealRules: { RequireCommissionBeforeClose: true },
+        ClosingRules: { RequireChecklistCompletion: true },
+        FollowUpDefaults: { DueInDays: 2 },
+        PipelineStages: {
+          Lead: ['New', 'Verified', 'Active', 'Inactive', 'Blacklisted'],
+          Requirement: ['Active', 'Matched', 'On Hold', 'Closed', 'Cancelled'],
+          Matching: ['Open', 'Matched'],
+          Shortlist: ['Active', 'Removed'],
+          SiteVisit: ['Scheduled', 'Confirmed', 'Rescheduled', 'Completed', 'Cancelled', 'NoShow'],
+          Negotiation: ['OPEN', 'OFFER_MADE', 'COUNTER_OFFER', 'NEGOTIATING', 'AGREED', 'TOKEN_PENDING', 'TOKEN_RECEIVED', 'AGREEMENT_PENDING', 'AGREEMENT_DONE', 'REGISTRATION_PENDING', 'COMPLETED', 'CANCELLED', 'FAILED', 'ON_HOLD'],
+          Token: ['PENDING', 'PARTIAL', 'PAID', 'CANCELLED', 'REFUNDED', 'EXPIRED'],
+          Deal: ['OPEN', 'COMPLETED', 'CLOSED', 'CANCELLED'],
+          Commission: ['PENDING', 'PARTIAL', 'RECEIVED', 'OVERDUE', 'CANCELLED'],
+          Closing: ['IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED']
+        }
+      }
+    },
+    Version: 1,
+    UpdatedAt: '2026-01-01'
+  },
+  masters: [
+    { MasterID: 'MST-SOURCE-MANUAL', MasterType: 'LeadSources', Value: 'Manual', Label: 'Manual', Active: true, UsedCount: 0, Metadata: {}, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' },
+    { MasterID: 'MST-SOURCE-REFERENCE', MasterType: 'LeadSources', Value: 'Reference', Label: 'Reference', Active: true, UsedCount: 0, Metadata: {}, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' },
+    { MasterID: 'MST-CATEGORY-RES', MasterType: 'Categories', Value: 'Residential', Label: 'Residential', Active: true, UsedCount: 0, Metadata: {}, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' },
+    { MasterID: 'MST-CATEGORY-COM', MasterType: 'Categories', Value: 'Commercial', Label: 'Commercial', Active: true, UsedCount: 0, Metadata: {}, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' },
+    { MasterID: 'MST-TRANSACTION-PURCHASE', MasterType: 'TransactionTypes', Value: 'Purchase', Label: 'Purchase', Active: true, UsedCount: 0, Metadata: {}, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' },
+    { MasterID: 'MST-TRANSACTION-SALE', MasterType: 'TransactionTypes', Value: 'Sale', Label: 'Sale', Active: true, UsedCount: 0, Metadata: {}, CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01' }
+  ]
+};
+
+const dataStore = {
+  ...starterSeed,
+  metadata: {
+    schema: modelSchema,
+    formRegistry
+  }
+};
+
+module.exports = {
+  dataStore,
+  starterSeed
+};
