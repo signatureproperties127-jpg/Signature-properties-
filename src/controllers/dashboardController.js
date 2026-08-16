@@ -1,8 +1,8 @@
 const { DashboardService } = require('../services/dashboardService');
 
 class DashboardController {
-  constructor() {
-    this.dashboardService = new DashboardService();
+  constructor(repository = null) {
+    this.dashboardService = new DashboardService(repository);
   }
 
   async summary() {

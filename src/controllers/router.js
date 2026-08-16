@@ -9,7 +9,7 @@ const { SiteVisitController } = require('./siteVisitController');
 class ApiRouter {
   constructor(repository = null) {
     this.routes = {
-      dashboard: new DashboardController(),
+      dashboard: new DashboardController(repository),
       leads: new LeadController(repository),
       transactions: new TransactionController(),
       requirements: new RequirementController(repository),
