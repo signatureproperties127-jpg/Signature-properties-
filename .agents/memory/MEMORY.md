@@ -3,3 +3,4 @@
 - [V2 Body Caching Pattern](v2-body-caching.md) — readJson() in server.js caches body in req._parsedBody; V2Router pre-reads for POST/PATCH; legacy handlers must check cache
 - [V2 IdEngine Counter Overwrite Bug](v2-counter-overwrite.md) — services must re-read DB after calling idEngine.next*() or the counter write is overwritten; createRequirement was fixed this way
 - [V2 Select Option Validation](v2-select-option-validation.md) — option-membership check is string-only; numeric values (e.g. Parking:2) bypass it; missing value never errors; only bad strings rejected
+- [V2 updateRequirement Return Shape](v2-update-requirement-return.md) — returns { requirement, changedFields, history }, NOT { ...flatFields }; tests must use patch.data.requirement.FormVersion not patch.data.FormVersion

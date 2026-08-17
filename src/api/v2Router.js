@@ -32,10 +32,11 @@
 
 'use strict';
 
-const { V2LeadService }        = require('../services/v2LeadService');
-const { V2TransactionService } = require('../services/v2TransactionService');
-const { V2RequirementService } = require('../services/v2RequirementService');
-const { V2ConfigService }      = require('../services/v2ConfigService');
+const { V2LeadService }          = require('../services/v2LeadService');
+const { V2TransactionService }   = require('../services/v2TransactionService');
+const { V2RequirementService }   = require('../services/v2RequirementService');
+const { V2ConfigService }        = require('../services/v2ConfigService');
+const { V2FormRegistryService }  = require('../services/v2FormRegistryService');
 const { EntityConfig, TagConfig, WorkflowConfig, ScoringConfig, ColumnConfig, V2FormRegistry, SourceOptions } = require('../data/v2Config');
 
 // ── Feature Flag ──────────────────────────────────────────────────────────────
@@ -47,14 +48,17 @@ function isV2Enabled() {
 
 class V2Router {
   constructor(repository) {
-    this.leadSvc   = new V2LeadService(repository);
-    this.txnSvc    = new V2TransactionService(repository);
-    this.reqSvc    = new V2RequirementService(repository);
-    this.configSvc = new V2ConfigService(repository);
-    this.repo      = repository;
+    this.leadSvc      = new V2LeadService(repository);
+    this.txnSvc       = new V2TransactionService(repository);
+    this.reqSvc       = new V2RequirementService(repository);
+    this.configSvc    = new V2ConfigService(repository);
+    this.registrySvc  = new V2FormRegistryService(repository, this.configSvc);
+    this.repo         = repository;
 
     // Phase 8: seed FieldConfig and QuestionConfig on startup (idempotent)
     this.configSvc.seedConfigIfEmpty();
+    // Phase 9: seed FormRegistry on startup (idempotent)
+    this.registrySvc.seedFormRegistryIfEmpty();
   }
 
   /**
@@ -195,6 +199,48 @@ class V2Router {
       return this._ok({ ok: true, data: WorkflowConfig });
     }
 
+    // ── Phase 9: Form Registry + SubCategory routes ───────────────────────────
+
+    if (pathname === '/api/v2/config/subcategories' && method === 'GET') {
+      const category       = url.searchParams.get('category');
+      const transactionType = url.searchParams.get('transactionType') || url.searchParams.get('txnType');
+      if (!category) return this._json(400, { ok: false, error: 'category is required' });
+      const data = this.registrySvc.getSubCategories(category, transactionType || null);
+      return this._ok({ ok: true, data, count: data.length });
+    }
+
+    if (pathname === '/api/v2/config/categories' && method === 'GET') {
+      const data = this.registrySvc.getCategories();
+      return this._ok({ ok: true, data, count: data.length });
+    }
+
+    // GET /api/v2/config/forms/:formId  (specific form — must come before /forms list)
+    const formByIdMatch = pathname.match(/^\/api\/v2\/config\/forms\/([^/]+)$/);
+    if (formByIdMatch && method === 'GET') {
+      const formId = formByIdMatch[1];
+      const meta   = this.registrySvc.getFormById(formId);
+      if (!meta) return this._json(404, { ok: false, error: `Form not found: ${formId}` });
+
+      const resolved = this.registrySvc.resolveFormConfig(
+        meta.TransactionType, meta.Category, meta.SubCategory
+      );
+      return this._ok({ ok: true, data: { ...meta, resolved } });
+    }
+
+    if (pathname === '/api/v2/config/forms' && method === 'GET') {
+      const filters = {};
+      const txn = url.searchParams.get('transactionType') || url.searchParams.get('txnType');
+      const cat = url.searchParams.get('category');
+      const sub = url.searchParams.get('subCategory') || url.searchParams.get('subcategory');
+      const active = url.searchParams.get('active');
+      if (txn)    filters.transactionType = txn;
+      if (cat)    filters.category        = cat;
+      if (sub)    filters.subCategory     = sub;
+      if (active !== null && active !== undefined) filters.isActive = active !== 'false';
+      const data = this.registrySvc.getAllForms(filters);
+      return this._ok({ ok: true, data, count: data.length });
+    }
+
     if (pathname === '/api/v2/requirements/global' && method === 'GET') {
       const filters = {
         RequirementStatus: url.searchParams.get('status') || undefined,
@@ -221,10 +267,17 @@ class V2Router {
     }
 
     if (pathname === '/api/v2/form-config' && method === 'GET') {
-      const txnType    = url.searchParams.get('transactionType') || url.searchParams.get('txnType') || '';
-      const category   = url.searchParams.get('category') || '';
+      const txnType     = url.searchParams.get('transactionType') || url.searchParams.get('txnType') || '';
+      const category    = url.searchParams.get('category') || '';
       const subCategory = url.searchParams.get('subCategory') || url.searchParams.get('subcategory') || '';
-      const config     = this.reqSvc.getFormConfig(txnType, category, subCategory);
+      const resolved    = url.searchParams.get('resolved') !== 'false'; // default: full resolved config
+      if (resolved && txnType) {
+        // Phase 9: return full resolved config (fields + questions + dependencies)
+        const data = this.registrySvc.resolveFormConfig(txnType, category, subCategory);
+        return this._ok({ ok: true, data });
+      }
+      // Backward-compatible: return raw static form config
+      const config = this.reqSvc.getFormConfig(txnType, category, subCategory);
       return this._ok({ ok: true, data: config });
     }
 

@@ -242,6 +242,15 @@ const V2FormRegistry = {
   'Lease|Industrial|Factory': buildIndustrialForm('Lease', 'Industrial', 'Factory'),
   'Lease Out|Industrial|Factory': buildIndustrialForm('Lease Out', 'Industrial', 'Factory'),
 
+  // ── Agriculture ─────────────────────────────────────────────────────────────
+  'Purchase|Agriculture|Agricultural Land': buildAgricultureForm('Purchase', 'Agriculture', 'Agricultural Land'),
+  'Purchase|Agriculture|Farm House':        buildAgricultureForm('Purchase', 'Agriculture', 'Farm House'),
+  'Purchase|Agriculture|Orchard':           buildAgricultureForm('Purchase', 'Agriculture', 'Orchard'),
+  'Sale|Agriculture|Agricultural Land':     buildAgricultureForm('Sale',     'Agriculture', 'Agricultural Land'),
+  'Sale|Agriculture|Farm House':            buildAgricultureForm('Sale',     'Agriculture', 'Farm House'),
+  'Lease|Agriculture|Agricultural Land':    buildAgricultureForm('Lease',    'Agriculture', 'Agricultural Land'),
+  'Lease Out|Agriculture|Agricultural Land':buildAgricultureForm('Lease Out','Agriculture', 'Agricultural Land'),
+
   // Fallback generic
   'generic': buildGenericForm()
 };
@@ -265,7 +274,18 @@ function buildCommonFields() {
   };
 }
 
+// Rent-specific fields — included in Rent / Rent Out forms only
+function buildRentSpecificFields() {
+  return {
+    tenantType:         field('TenantType',         'Tenant Type',              'Select',  false, 30, { options: ['Family', 'Bachelor', 'Company', 'Any'] }),
+    deposit:            field('Deposit',             'Security Deposit (months)', 'Number', false, 31, { validation: 'positive-number' }),
+    maintenanceCharges: field('MaintenanceCharges',  'Maintenance Charges (₹/mo)', 'Number', false, 32),
+    petAllowed:         field('PetAllowed',          'Pets Allowed',             'Boolean', false, 33)
+  };
+}
+
 function buildResidentialForm(txnType, category, subCategory, bhkOptions) {
+  const isRent = txnType === 'Rent' || txnType === 'Rent Out';
   return {
     formKey: `${txnType}|${category}|${subCategory}`,
     formVersion: FORM_REGISTRY_VERSION,
@@ -276,6 +296,7 @@ function buildResidentialForm(txnType, category, subCategory, bhkOptions) {
     isActive: true,
     fields: {
       ...buildCommonFields(),
+      ...(isRent ? buildRentSpecificFields() : {}),
       bhkMin: field('BHKMin', 'BHK Min', 'Select', true, 20, { options: bhkOptions }),
       bhkMax: field('BHKMax', 'BHK Max', 'Select', true, 21, { options: bhkOptions }),
       areaMin: field('AreaMin', 'Area Min (sq.ft)', 'Number', false, 22, { validation: 'positive-number' }),
@@ -296,6 +317,7 @@ function buildResidentialForm(txnType, category, subCategory, bhkOptions) {
 }
 
 function buildCommercialForm(txnType, category, subCategory) {
+  const isRent = txnType === 'Rent' || txnType === 'Rent Out';
   return {
     formKey: `${txnType}|${category}|${subCategory}`,
     formVersion: FORM_REGISTRY_VERSION,
@@ -306,6 +328,7 @@ function buildCommercialForm(txnType, category, subCategory) {
     isActive: true,
     fields: {
       ...buildCommonFields(),
+      ...(isRent ? buildRentSpecificFields() : {}),
       areaMin: field('AreaMin', 'Area Min (sq.ft)', 'Number', true, 20, { validation: 'positive-number' }),
       areaMax: field('AreaMax', 'Area Max (sq.ft)', 'Number', true, 21, { validation: 'positive-number' }),
       businessType: field('BusinessType', 'Business Type', 'Select', true, 22, { options: ['Retail', 'Office', 'Hospitality', 'Healthcare', 'Education', 'IT/ITES', 'Other'] }),
@@ -317,6 +340,31 @@ function buildCommercialForm(txnType, category, subCategory) {
     },
     dependencies: [
       { field: 'AreaMax', dependsOn: 'AreaMin', rule: 'gte', errorMessage: 'Area Max must be ≥ Area Min' },
+      { field: 'budgetMax', dependsOn: 'budgetMin', rule: 'gte', errorMessage: 'Budget Max must be ≥ Budget Min' }
+    ]
+  };
+}
+
+function buildAgricultureForm(txnType, category, subCategory) {
+  return {
+    formKey: `${txnType}|${category}|${subCategory}`,
+    formVersion: FORM_REGISTRY_VERSION,
+    formName: `${txnType} — ${category} — ${subCategory}`,
+    transactionType: txnType,
+    category,
+    subCategory,
+    isActive: true,
+    fields: {
+      ...buildCommonFields(),
+      totalArea:            field('TotalArea',            'Total Area (acres)',        'Number',  true,  20, { validation: 'positive-number' }),
+      waterSource:          field('WaterSource',          'Water Source',             'Select',  false, 21, { options: ['Well', 'Borewell', 'Canal', 'River', 'None'] }),
+      soilType:             field('SoilType',             'Soil Type',                'Select',  false, 22, { options: ['Black', 'Red', 'Alluvial', 'Sandy', 'Loamy', 'Mixed'] }),
+      electricityAvailable: field('ElectricityAvailable', 'Electricity Available',    'Boolean', false, 23),
+      roadAccess:           field('RoadAccess',           'Road Access',              'Boolean', false, 24),
+      irrigationAvailable:  field('IrrigationAvailable',  'Irrigation Available',     'Boolean', false, 25),
+      fencing:              field('Fencing',              'Fencing Available',        'Boolean', false, 26)
+    },
+    dependencies: [
       { field: 'budgetMax', dependsOn: 'budgetMin', rule: 'gte', errorMessage: 'Budget Max must be ≥ Budget Min' }
     ]
   };
