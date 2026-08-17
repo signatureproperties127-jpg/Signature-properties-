@@ -57,9 +57,10 @@ jobs:
         run: |
           set -euo pipefail
           old_key=$(ssh-keygen -yf ~/.ssh/old_deploy_key | awk '{ print $1 " " $2 }')
-          printf '%s\n' "$old_key" | ssh -i ~/.ssh/new_deploy_key -p "$VM_SSH_PORT" "$VM_USER@$VM_HOST" '
+          ssh -i ~/.ssh/new_deploy_key -p "$VM_SSH_PORT" "$VM_USER@$VM_HOST" \
+            "OLD_KEY=$(printf '%q' "$old_key") bash -s" <<'EOF'
             set -euo pipefail
-            IFS= read -r old_key
+            old_key=$OLD_KEY
             authorized_keys="$HOME/.ssh/authorized_keys"
             matches=$(awk -v key="$old_key" '$1 " " $2 == key { count++ } END { print count + 0 }' "$authorized_keys")
             test "$matches" -eq 1
@@ -67,7 +68,7 @@ jobs:
             awk -v key="$old_key" '$1 " " $2 != key' "$authorized_keys" > "$temporary_file"
             chmod 600 "$temporary_file"
             mv "$temporary_file" "$authorized_keys"
-          '
+          EOF
 
       - name: Clean up SSH credentials
         if: always()
