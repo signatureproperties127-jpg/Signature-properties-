@@ -115,6 +115,25 @@ describe('A. Dry-run — no data mutation', () => {
 });
 
 // ── B. Apply mode ─────────────────────────────────────────────────────────────
+//
+// Each apply test cleans up ONLY its own manifest (via clearManifestsForDb)
+// after asserting. This prevents manifest accumulation across test runs
+// without affecting concurrent tests that use different dbFile paths.
+// clearManifestsForDb is defined in section C below; tests in B call it
+// inline since JS hoists function declarations.
+
+// Forward-declare so B tests can reference it; full def is in C section.
+function _clearMfForDb(dbFile) {
+  const MFX = 'migration-manifest-';
+  const BD  = path.join(__dirname, '../data/backups');
+  if (!fs.existsSync(BD)) return;
+  for (const f of fs.readdirSync(BD).filter(f => f.startsWith(MFX))) {
+    try {
+      const m = JSON.parse(fs.readFileSync(path.join(BD, f), 'utf8'));
+      if (m.sourceDbPath === dbFile) fs.unlinkSync(path.join(BD, f));
+    } catch { /* already gone */ }
+  }
+}
 
 describe('B. Apply mode — actual migration', () => {
   test('--apply creates a backup file', () => {
@@ -126,6 +145,7 @@ describe('B. Apply mode — actual migration', () => {
     assert.ok(fs.existsSync(backupDir), 'Backup directory must exist after apply');
     const backups = fs.readdirSync(backupDir).filter(f => f.includes('backup'));
     assert.ok(backups.length > 0, 'At least one backup file must exist after apply');
+    _clearMfForDb(dbFile);
   });
 
   test('--apply creates V2 records in Leads', () => {
@@ -135,6 +155,7 @@ describe('B. Apply mode — actual migration', () => {
     const db = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     const v2Leads = db.Leads.filter(l => l._v2 === true);
     assert.ok(v2Leads.length > 0, 'Apply must create V2 Lead records');
+    _clearMfForDb(dbFile);
   });
 
   test('--apply preserves legacy records (LEAD-0001 still exists)', () => {
@@ -144,6 +165,7 @@ describe('B. Apply mode — actual migration', () => {
     const db = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     const legacyLead = db.Leads.find(l => l.LeadID === 'LEAD-0001');
     assert.ok(legacyLead, 'Legacy LEAD-0001 must still exist after migration');
+    _clearMfForDb(dbFile);
   });
 
   test('--apply creates MigrationMap entries', () => {
@@ -153,6 +175,7 @@ describe('B. Apply mode — actual migration', () => {
     const db = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     assert.ok(Array.isArray(db.MigrationMap), 'MigrationMap must exist');
     assert.ok(db.MigrationMap.length > 0, 'MigrationMap must have entries after apply');
+    _clearMfForDb(dbFile);
   });
 
   test('--apply MigrationMap has LegacyID, V2ID, EntityType', () => {
@@ -167,6 +190,7 @@ describe('B. Apply mode — actual migration', () => {
       assert.ok(entry.Status,      'MigrationMap entry must have Status');
       assert.ok(entry.CreatedAt,   'MigrationMap entry must have CreatedAt');
     }
+    _clearMfForDb(dbFile);
   });
 
   test('--apply: V2 Lead preserves ClientName', () => {
@@ -176,6 +200,7 @@ describe('B. Apply mode — actual migration', () => {
     const db = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     const v2Leads = db.Leads.filter(l => l._v2 === true);
     assert.ok(v2Leads.some(l => l.ClientName === 'Rahul Shah'), 'V2 Lead must preserve ClientName');
+    _clearMfForDb(dbFile);
   });
 
   test('--apply: V2 Lead maps Phone to PrimaryMobile', () => {
@@ -186,6 +211,7 @@ describe('B. Apply mode — actual migration', () => {
     const v2 = db.Leads.find(l => l._v2 && l.LegacyID === 'LEAD-0001');
     assert.ok(v2, 'V2 Lead for LEAD-0001 must exist');
     assert.ok(v2.PrimaryMobile, 'V2 Lead must have PrimaryMobile mapped from Phone');
+    _clearMfForDb(dbFile);
   });
 
   test('--apply: V2 Requirement.LeadID === V2 Transaction.LeadID', () => {
@@ -197,10 +223,10 @@ describe('B. Apply mode — actual migration', () => {
     const v2Txns = db.Transactions.filter(t => t._v2);
     for (const req of v2Reqs) {
       const txn = v2Txns.find(t => t.TransactionID === req.TransactionID || t.LegacyID === req.LegacyID?.replace('REQ', 'TXN'));
-      if (!txn) continue; // might be from different migration source
-      // Both must share same LeadID
-      if (txn) assert.equal(req.LeadID, txn.LeadID, `Req ${req.RequirementID} LeadID must match Txn LeadID`);
+      if (!txn) continue;
+      assert.equal(req.LeadID, txn.LeadID, `Req ${req.RequirementID} LeadID must match Txn LeadID`);
     }
+    _clearMfForDb(dbFile);
   });
 
   test('--apply: UNKNOWN fields remain UNKNOWN — not invented', () => {
@@ -209,14 +235,14 @@ describe('B. Apply mode — actual migration', () => {
     runMigration(dbFile, '--apply');
     const db = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     const v2Req = db.Requirements.find(r => r._v2 && r.LegacyID === 'REQ-0001');
-    if (!v2Req) return; // if not migrated for other reason
-    // Fields that were not set in fixture should not be KNOWN
+    if (!v2Req) { _clearMfForDb(dbFile); return; }
     const fields = v2Req.Fields || {};
     for (const [k, v] of Object.entries(fields)) {
       if (v.state === 'KNOWN') {
         assert.ok(v.value != null, `KNOWN field ${k} must have a value`);
       }
     }
+    _clearMfForDb(dbFile);
   });
 
   test('running --apply twice is idempotent (already migrated records skipped)', () => {
@@ -225,12 +251,13 @@ describe('B. Apply mode — actual migration', () => {
     runMigration(dbFile, '--apply');
     const dbAfterFirst = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     const v2CountAfterFirst = dbAfterFirst.Leads.filter(l => l._v2).length;
+    _clearMfForDb(dbFile);  // clean after first apply so second creates only 1 manifest
 
     runMigration(dbFile, '--apply');
     const dbAfterSecond = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     const v2CountAfterSecond = dbAfterSecond.Leads.filter(l => l._v2).length;
-
     assert.equal(v2CountAfterSecond, v2CountAfterFirst, 'Second apply must not create duplicate V2 records');
+    _clearMfForDb(dbFile);
   });
 
   test('does not touch Inventory or Matches', () => {
@@ -241,50 +268,138 @@ describe('B. Apply mode — actual migration', () => {
     const after = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
     assert.deepEqual(after.Inventory, before.Inventory, 'Inventory must not be modified');
     assert.deepEqual(after.Matches,   before.Matches,   'Matches must not be modified');
+    _clearMfForDb(dbFile);
   });
 });
 
 // ── C. Rollback ───────────────────────────────────────────────────────────────
+//
+// Rollback uses a manifest-based selection mechanism.
+// Each --apply writes one migration-manifest-*.json in data/backups.
+// --rollback requires exactly ONE manifest; multiple manifests → STOP.
+//
+// ISOLATION DESIGN:
+//   Tests run concurrently with other test files that also use data/backups.
+//   Surgical helpers operate ONLY on manifests whose sourceDbPath matches the
+//   test's own dbFile, so concurrent tests are never affected.
+
+const MANIFEST_PREFIX = 'migration-manifest-';
+const BACKUP_DIR_PATH = path.join(__dirname, '../data/backups');
+
+/** Remove only manifests created for a specific DB file path (surgical, safe for concurrency). */
+function clearManifestsForDb(dbFile) {
+  if (!fs.existsSync(BACKUP_DIR_PATH)) return;
+  const files = fs.readdirSync(BACKUP_DIR_PATH).filter(f => f.startsWith(MANIFEST_PREFIX));
+  for (const f of files) {
+    try {
+      const m = JSON.parse(fs.readFileSync(path.join(BACKUP_DIR_PATH, f), 'utf8'));
+      if (m.sourceDbPath === dbFile) fs.unlinkSync(path.join(BACKUP_DIR_PATH, f));
+    } catch { /* file already gone or unreadable — skip */ }
+  }
+}
+
+/**
+ * Hide all manifests NOT belonging to dbFile by renaming to __p18rb__* so that
+ * --rollback sees exactly the one manifest for this test's apply run.
+ * Returns list of hidden names for restoration.
+ */
+function hideForeignManifests(dbFile) {
+  if (!fs.existsSync(BACKUP_DIR_PATH)) return [];
+  const hidden = [];
+  const files  = fs.readdirSync(BACKUP_DIR_PATH).filter(f => f.startsWith(MANIFEST_PREFIX));
+  for (const f of files) {
+    try {
+      const m = JSON.parse(fs.readFileSync(path.join(BACKUP_DIR_PATH, f), 'utf8'));
+      if (m.sourceDbPath !== dbFile) {
+        const from = path.join(BACKUP_DIR_PATH, f);
+        const to   = path.join(BACKUP_DIR_PATH, `__p18rb__${f}`);
+        fs.renameSync(from, to);
+        hidden.push({ from, to });
+      }
+    } catch { /* unreadable manifest — hide it too to be safe */
+      try {
+        const from = path.join(BACKUP_DIR_PATH, f);
+        const to   = path.join(BACKUP_DIR_PATH, `__p18rb__${f}`);
+        fs.renameSync(from, to);
+        hidden.push({ from, to });
+      } catch { /* already gone */ }
+    }
+  }
+  return hidden;
+}
+
+function restoreHiddenManifests(hidden) {
+  for (const { from, to } of hidden) {
+    try { if (fs.existsSync(to)) fs.renameSync(to, from); } catch { /* gone */ }
+  }
+}
 
 describe('C. Rollback mechanism', () => {
-  test('--rollback restores database from backup', () => {
+  test('--rollback restores database from backup (manifest-based)', () => {
     const dir    = makeTempDir();
     const dbFile = makeFixtureDb(dir);
     const before = fs.readFileSync(dbFile, 'utf8');
 
-    // Apply migration (creates backup)
+    // Remove any stale manifests for this specific dbFile
+    clearManifestsForDb(dbFile);
+
+    // Apply migration — creates exactly one backup + one manifest for dbFile
     runMigration(dbFile, '--apply');
 
     // Verify database changed
     const afterApply = fs.readFileSync(dbFile, 'utf8');
     assert.notEqual(afterApply, before, 'Apply must have changed the database');
 
-    // Rollback
-    const rollbackResult = runMigration(dbFile, '--rollback');
-    assert.equal(rollbackResult.success, true, `Rollback failed: ${rollbackResult.stderr}`);
+    // Hide any foreign manifests (from concurrent test files) so rollback
+    // sees exactly 1 manifest and can proceed unambiguously
+    const hidden = hideForeignManifests(dbFile);
+    let rollbackResult;
+    try {
+      rollbackResult = runMigration(dbFile, '--rollback');
+    } finally {
+      restoreHiddenManifests(hidden);
+    }
 
-    // Verify database restored
+    assert.equal(rollbackResult.success, true,
+      `Rollback failed: ${rollbackResult.stderr}\n${rollbackResult.stdout}`);
+
+    // Verify database restored to pre-apply state
     const afterRollback = fs.readFileSync(dbFile, 'utf8');
     const parsedBefore  = JSON.parse(before);
     const parsedAfter   = JSON.parse(afterRollback);
     assert.equal(
       parsedAfter.Leads.filter(l => !l._v2).length,
       parsedBefore.Leads.length,
-      'Rollback must restore original leads count'
+      'Rollback must restore original legacy leads count'
     );
+
+    // Cleanup: remove our own manifest
+    clearManifestsForDb(dbFile);
   });
 
-  test('--rollback reports success=false or OK when no backup is present (depends on prior state)', () => {
+  test('--rollback fails gracefully when no manifest present (new safety contract)', () => {
     const dir    = makeTempDir();
     const dbFile = makeFixtureDb(dir);
-    const result = runMigration(dbFile, '--rollback');
-    // The script uses a shared backup dir (data/backups).
-    // If prior tests created backups, rollback will succeed (exit 0).
-    // If no backups exist, it must fail gracefully (exit 1, no crash).
-    // Either way, the process must not crash with uncaught exception.
+
+    // Ensure no manifest for this specific dbFile
+    clearManifestsForDb(dbFile);
+
+    // Hide all foreign manifests so rollback sees 0
+    const hidden = hideForeignManifests(dbFile);
+    let result;
+    try {
+      result = runMigration(dbFile, '--rollback');
+    } finally {
+      restoreHiddenManifests(hidden);
+    }
+
+    assert.equal(result.success, false, 'Rollback must fail when no manifest present');
     const output = result.stdout + result.stderr;
-    const noCrash = !output.includes('Uncaught') && !output.includes('TypeError') && !output.includes('SyntaxError');
-    assert.ok(noCrash, 'Rollback must not crash with uncaught exception');
+    assert.ok(
+      output.includes('ABORTED') && output.includes('manifest'),
+      `Must report ABORTED + mention manifest: ${output.slice(0, 300)}`
+    );
+    assert.ok(!output.includes('Uncaught'), 'Must not crash with uncaught exception');
   });
 });
 

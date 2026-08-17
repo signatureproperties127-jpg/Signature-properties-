@@ -1,27 +1,21 @@
 ---
 name: Phases 14-20 Complete
-description: Completion status of V2 build phases, test counts, and key doc locations.
+description: All V2 phases done including Phase 20 Rollback Safety Fix; 874/874 tests
 ---
 
-## Status (2026-08-18)
-All V2 phases complete. Full regression: 860/860 passing, 0 failures.
+All phases complete. Final test count: 874/874.
 
-## Test Suite Counts
-- Phases 1–12 (baseline): 634 tests
-- Phase 14 (Client Workspace): 43 tests → test/v2Phase14.test.js
-- Phase 15+16 (Client List + Activity/FollowUp): 81 tests → test/v2Phase15.test.js
-- Phase 17 (Canonical V2 API): 43 tests → test/v2Phase17.test.js
-- Phase 18 (Migration): 20 tests → test/v2Phase18.test.js
-- Phase 19 (Business Invariants): 37 tests → test/v2Phase19.test.js
-- E2E: skips gracefully when playwright binaries absent → test/e2e/browser-smoke.js
+Phases 14–19: See docs/V2-API.md, docs/V2-TEST-REPORT.md, docs/V2-ROLLOUT.md.
 
-## Documentation
-- docs/V2-API.md — canonical API reference
-- docs/V2-TEST-REPORT.md — certification report
-- docs/V2-ROLLOUT.md — phased rollout gate + go/no-go checklist
+Phase 20 — Rollback Safety Fix:
+- scripts/migrateV2.js --apply now writes migration-manifest-<runId>.json alongside every backup
+- --rollback reads ONLY manifests; hard-stops on: 0 manifests, >1 manifests, sourceDbPath mismatch, missing backup file, checksum mismatch
+- Test artifacts (sig-realty-db-backup-*.json) have no manifest → permanently ineligible for automated rollback
+- Safety gate backup (pre-apply-safety-gate-20260817T195840Z.json, 101 KB, SHA-256 a829b28a…) is the only production-eligible backup
+- Test file: test/v2Phase20RollbackSafety.test.js (14 tests, Groups A-H)
 
-## Key Service Wiring Order
-configSvc → registrySvc → depSvc → scoringSvc → actSvc/fuSvc → leadSvc/txnSvc/reqSvc
-
-## Phase 13
-Permanently deferred (Quick Capture). Do NOT implement without explicit approval.
+Test isolation pattern (critical for concurrent test execution):
+- Phase 18 apply tests call _clearMfForDb(dbFile) after each test (surgical: only removes manifests for that specific temp dbFile)
+- Phase 18 rollback test uses hideForeignManifests/restoreHiddenManifests to isolate WITHOUT global deletion
+- Phase 20 G2 uses report-based assertion (data/migration-report.json) instead of global manifest count
+- This pattern is immune to node --test concurrent file execution

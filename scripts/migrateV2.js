@@ -21,17 +21,19 @@
  *   - Partial failure → STOP (no partial commit).
  */
 
-const fs   = require('fs');
-const path = require('path');
-const os   = require('os');
+const fs     = require('fs');
+const path   = require('path');
+const os     = require('os');
+const crypto = require('crypto');
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
-const DB_FILE     = process.env.SIG_REALTY_DB_FILE
+const DB_FILE          = process.env.SIG_REALTY_DB_FILE
   || path.join(__dirname, '../data/sig-realty-db.json');
-const BACKUP_DIR  = path.join(__dirname, '../data/backups');
-const REPORT_FILE = path.join(__dirname, '../data/migration-report.json');
+const BACKUP_DIR       = path.join(__dirname, '../data/backups');
+const REPORT_FILE      = path.join(__dirname, '../data/migration-report.json');
 const MIGRATION_VERSION = '18.0';
+const MANIFEST_PREFIX  = 'migration-manifest-';
 
 // ── CLI Args ──────────────────────────────────────────────────────────────────
 
@@ -62,14 +64,49 @@ function writeDb(db, file = DB_FILE) {
   fs.writeFileSync(file, JSON.stringify(db, null, 2), 'utf8');
 }
 
+// ── Checksum ──────────────────────────────────────────────────────────────────
+
+function sha256File(filePath) {
+  const content = fs.readFileSync(filePath);
+  return 'sha256:' + crypto.createHash('sha256').update(content).digest('hex');
+}
+
+// ── Backup ────────────────────────────────────────────────────────────────────
+
 function createBackup(db) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const ts   = new Date().toISOString().replace(/[:.]/g, '-');
+  const runId = ts;
   const file = path.join(BACKUP_DIR, `sig-realty-db-backup-${ts}.json`);
   fs.writeFileSync(file, JSON.stringify(db, null, 2), 'utf8');
   const size = fs.statSync(file).size;
   log(`Backup created: ${file} (${size} bytes)`);
-  return { path: file, timestamp: ts, size };
+  return { path: file, timestamp: ts, size, runId };
+}
+
+/**
+ * Write a migration manifest alongside the backup.
+ * The manifest is the ONLY authoritative source for rollback selection.
+ * Test/fixture backups have no manifest and are therefore never eligible.
+ */
+function createManifest(backupInfo) {
+  const checksum = sha256File(backupInfo.path);
+  const manifest = {
+    runId:            backupInfo.runId,
+    backupPath:       backupInfo.path,
+    sourceDbPath:     DB_FILE,
+    dbSizeBytes:      backupInfo.size,
+    checksum,
+    timestamp:        new Date().toISOString(),
+    migrationVersion: MIGRATION_VERSION,
+    environment:      process.env.NODE_ENV || 'production',
+    hostname:         os.hostname(),
+    context:          'production-apply'
+  };
+  const mFile = path.join(BACKUP_DIR, `${MANIFEST_PREFIX}${backupInfo.runId}.json`);
+  fs.writeFileSync(mFile, JSON.stringify(manifest, null, 2), 'utf8');
+  log(`Migration manifest created: ${mFile}`);
+  return { manifestFile: mFile, manifest };
 }
 
 function verifyBackup(backupPath) {
@@ -96,32 +133,99 @@ function generateV2ReqId(index) {
 }
 
 // ── Rollback ──────────────────────────────────────────────────────────────────
+//
+// SAFETY CONTRACT:
+//   - Rollback ONLY uses a manifest written by --apply.
+//   - Test/fixture backups have no manifest and are NEVER eligible.
+//   - 0 manifests  → STOP (no guessing, no fallback).
+//   - >1 manifests → STOP (ambiguous; cannot determine which run to undo).
+//   - Manifest sourceDbPath must match current DB_FILE (environment check).
+//   - Backup file must exist at the path recorded in the manifest.
+//   - Backup checksum must match the manifest checksum (integrity check).
+//   - Any single check failure → STOP with a clear error.
 
 function doRollback() {
   if (!fs.existsSync(BACKUP_DIR)) {
-    error('No backup directory found. Cannot rollback.');
+    error('ROLLBACK ABORTED — no backup directory found.');
+    error('No migration has been applied from this environment.');
     process.exit(1);
   }
-  const backups = fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.startsWith('sig-realty-db-backup-'))
+
+  // Step 1: Find manifest files only — never raw backup filenames
+  const manifestFiles = fs.readdirSync(BACKUP_DIR)
+    .filter(f => f.startsWith(MANIFEST_PREFIX) && f.endsWith('.json'))
     .sort();
 
-  if (backups.length === 0) {
-    error('No backups found. Cannot rollback.');
+  if (manifestFiles.length === 0) {
+    error('ROLLBACK ABORTED — no migration manifest found.');
+    error('Rollback requires a manifest created by --apply.');
+    error('Test/fixture backups do not have manifests and cannot be used.');
     process.exit(1);
   }
 
-  const latest = path.join(BACKUP_DIR, backups[backups.length - 1]);
-  log(`Latest backup: ${latest}`);
-
-  if (!verifyBackup(latest)) {
-    error('Backup file is corrupted or unreadable. Rollback aborted.');
+  if (manifestFiles.length > 1) {
+    error(`ROLLBACK ABORTED — ${manifestFiles.length} manifests found; ambiguous.`);
+    error('Cannot determine which migration run to undo. Manifests present:');
+    manifestFiles.forEach(f => error(`  ${path.join(BACKUP_DIR, f)}`));
+    error('Remove all manifests except the one for the run you want to undo, then retry.');
     process.exit(1);
   }
 
-  const db = readDb(latest);
-  log(`Backup has ${db.Leads.length} Leads, ${db.Requirements.length} Requirements.`);
-  log('ROLLBACK: Restoring database from backup…');
+  // Step 2: Read the single manifest
+  const manifestPath = path.join(BACKUP_DIR, manifestFiles[0]);
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch (e) {
+    error(`ROLLBACK ABORTED — manifest is unreadable or corrupt: ${manifestPath}`);
+    process.exit(1);
+  }
+
+  log(`Manifest: ${manifestPath}`);
+  log(`  Run ID:    ${manifest.runId}`);
+  log(`  Timestamp: ${manifest.timestamp}`);
+  log(`  Source DB: ${manifest.sourceDbPath}`);
+  log(`  Backup:    ${manifest.backupPath}`);
+
+  // Step 3: Environment check — manifest must be for THIS DB_FILE
+  if (!manifest.sourceDbPath || manifest.sourceDbPath !== DB_FILE) {
+    error('ROLLBACK ABORTED — environment mismatch.');
+    error(`  Manifest source DB : ${manifest.sourceDbPath}`);
+    error(`  Current  DB_FILE   : ${DB_FILE}`);
+    error('This manifest belongs to a different environment or DB path.');
+    process.exit(1);
+  }
+
+  // Step 4: Backup file must exist
+  if (!manifest.backupPath || !fs.existsSync(manifest.backupPath)) {
+    error('ROLLBACK ABORTED — backup file referenced in manifest does not exist.');
+    error(`  Expected: ${manifest.backupPath}`);
+    process.exit(1);
+  }
+
+  // Step 5: Checksum integrity check
+  if (manifest.checksum) {
+    const actual = sha256File(manifest.backupPath);
+    if (actual !== manifest.checksum) {
+      error('ROLLBACK ABORTED — backup file checksum mismatch.');
+      error(`  Manifest checksum : ${manifest.checksum}`);
+      error(`  Actual checksum   : ${actual}`);
+      error('Backup may be corrupted or tampered. Do not restore.');
+      process.exit(1);
+    }
+    log('Checksum verified ✓');
+  }
+
+  // Step 6: Basic content check
+  if (!verifyBackup(manifest.backupPath)) {
+    error('ROLLBACK ABORTED — backup file is unreadable or missing Leads array.');
+    process.exit(1);
+  }
+
+  // All checks passed — restore
+  const db = readDb(manifest.backupPath);
+  log(`Backup contains ${db.Leads.length} Leads, ${db.Requirements.length} Requirements.`);
+  log('ROLLBACK: Restoring database from manifest-verified backup…');
   writeDb(db);
   log('ROLLBACK COMPLETE.');
 }
@@ -495,8 +599,12 @@ function run() {
     error('Backup verification failed. Migration ABORTED.');
     process.exit(1);
   }
+  // Write manifest — this is the ONLY token rollback will accept
+  const { manifestFile } = createManifest(backup);
   log('Backup verified ✓');
-  report.backupPath = backup.path;
+  report.backupPath    = backup.path;
+  report.manifestFile  = manifestFile;
+  report.runId         = backup.runId;
 
   // Append V2 records (do NOT replace legacy records — they remain readable)
   db.Leads        = [...db.Leads,        ...newV2Leads];

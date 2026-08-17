@@ -1,0 +1,11 @@
+{
+  "Leads": [
+    {
+      "LeadID": "LEAD-FIXTURE",
+      "ClientName": "Rahul Shah"
+    }
+  ],
+  "Transactions": [],
+  "Requirements": [],
+  "MigrationMap": []
+}

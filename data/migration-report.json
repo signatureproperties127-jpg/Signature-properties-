@@ -1,22 +1,22 @@
 {
   "migrationVersion": "18.0",
   "mode": "dry-run",
-  "timestamp": "2026-08-17T19:58:29.451Z",
+  "timestamp": "2026-08-17T20:15:43.217Z",
   "backupPath": null,
   "scanned": {
-    "leads": 2,
-    "transactions": 3,
-    "requirements": 1
+    "leads": 1,
+    "transactions": 0,
+    "requirements": 0
   },
   "eligible": {
-    "leads": 2,
-    "transactions": 3,
-    "requirements": 1
+    "leads": 1,
+    "transactions": 0,
+    "requirements": 0
   },
   "migrated": {
-    "leads": 2,
-    "transactions": 3,
-    "requirements": 1
+    "leads": 1,
+    "transactions": 0,
+    "requirements": 0
   },
   "skipped": {
     "leads": 0,
@@ -25,13 +25,6 @@
   },
   "duplicates": [],
   "relationshipErrors": [],
-  "fieldWarnings": [
-    {
-      "RequirementID": "REQ-0001",
-      "warnings": [
-        "No FormVersion — migration version will be noted but not assigned"
-      ]
-    }
-  ],
+  "fieldWarnings": [],
   "manualReview": []
 }
