@@ -258,7 +258,7 @@ function buildCommonFields() {
     location2: field('Location2', 'Secondary Location', 'Text', false, 6),
     location3: field('Location3', 'Tertiary Location', 'Text', false, 7),
     avoidLocations: field('AvoidLocations', 'Avoid Locations', 'Text', false, 8),
-    possession: field('Possession', 'Possession', 'Select', false, 9, { options: ['Ready to Move', '0-6 Months', '6-12 Months', '1-2 Years', '2-3 Years', '3+ Years'] }),
+    possession: field('Possession', 'Possession', 'Select', false, 9, { options: ['Ready', 'Ready to Move', '0-6 Months', '6-12 Months', '1-2 Years', '2-3 Years', '3+ Years'] }),
     urgency: field('Urgency', 'Urgency', 'Select', true, 10, { options: ['Immediate', 'High', 'Medium', 'Low'] }),
     moveInDate: field('MoveInDate', 'Move-in Date', 'Date', false, 11),
     preferences: field('Preferences', 'Additional Preferences', 'Textarea', false, 50)

@@ -633,9 +633,11 @@ describe('V2Router: legacy contract and feature flag', () => {
   });
 });
 
-// ── Server-side form validation ───────────────────────────────────────────────
+// ── Server-side value validation ─────────────────────────────────────────────
+// Absence of a field is NEVER an error (remains UNKNOWN).
+// Only invalid provided values are rejected.
 
-describe('V2RequirementService: server-side form validation', () => {
+describe('V2RequirementService: value validation (provided values only)', () => {
   function makeServices(dbFile) {
     const repo = makeRepo(dbFile);
     const { V2LeadService }        = require('../src/services/v2LeadService');
@@ -657,7 +659,8 @@ describe('V2RequirementService: server-side form validation', () => {
     return { leadId: lead.data.LeadID, txnId: txn.data.TransactionID };
   }
 
-  test('rejects missing required field (Urgency) for Residential Flat', () => {
+  // ARCHITECTURE CHANGE: missing Urgency is NOT an error — it remains UNKNOWN.
+  test('accepts Residential Flat creation without Urgency (field remains UNKNOWN)', () => {
     const svcs = makeServices(makeTempDb());
     const { leadId, txnId } = createParents(svcs, '02');
     const result = svcs.reqSvc.createRequirement(txnId, {
@@ -665,19 +668,17 @@ describe('V2RequirementService: server-side form validation', () => {
       TransactionType: 'Purchase',
       Category: 'Residential',
       SubCategory: 'Flat',
-      BudgetMin: 5000000,
       BudgetMax: 8000000,
-      Location1: 'Pune',
-      BHKMin: '2BHK',
-      BHKMax: '3BHK'
-      // Urgency intentionally omitted — it is required
+      Location1: 'Pune'
+      // Urgency intentionally omitted — must remain UNKNOWN, not error
     });
-    assert.equal(result.ok, false, 'Should reject when required field Urgency is missing');
-    assert.ok(result.error.toLowerCase().includes('urgency') || result.error.toLowerCase().includes('required'),
-      `Expected 'urgency' or 'required' in error, got: ${result.error}`);
+    assert.equal(result.ok, true, `Should accept creation without Urgency. Got: ${result.error}`);
+    const urgencyEntry = (result.data.Fields || {}).Urgency;
+    assert.ok(!urgencyEntry || urgencyEntry.state === 'UNKNOWN',
+      'Urgency field should be UNKNOWN when not provided');
   });
 
-  test('rejects invalid option value for a Select field', () => {
+  test('rejects invalid option value for a Select field (bad value, not absence)', () => {
     const svcs = makeServices(makeTempDb());
     const { leadId, txnId } = createParents(svcs, '03');
     const result = svcs.reqSvc.createRequirement(txnId, {
@@ -685,11 +686,8 @@ describe('V2RequirementService: server-side form validation', () => {
       TransactionType: 'Purchase',
       Category: 'Residential',
       SubCategory: 'Flat',
-      BudgetMin: 5000000,
       BudgetMax: 8000000,
       Location1: 'Pune',
-      BHKMin: '2BHK',
-      BHKMax: '3BHK',
       Urgency: 'SUPER_URGENT'  // Not in ['Immediate', 'High', 'Medium', 'Low']
     });
     assert.equal(result.ok, false, 'Should reject invalid option value');
@@ -697,7 +695,7 @@ describe('V2RequirementService: server-side form validation', () => {
       `Expected option error, got: ${result.error}`);
   });
 
-  test('accepts valid option value for Urgency', () => {
+  test('accepts valid option value for Urgency when provided', () => {
     const svcs = makeServices(makeTempDb());
     const { leadId, txnId } = createParents(svcs, '04');
     const result = svcs.reqSvc.createRequirement(txnId, {
@@ -705,17 +703,14 @@ describe('V2RequirementService: server-side form validation', () => {
       TransactionType: 'Purchase',
       Category: 'Residential',
       SubCategory: 'Flat',
-      BudgetMin: 5000000,
       BudgetMax: 8000000,
       Location1: 'Pune',
-      BHKMin: '2BHK',
-      BHKMax: '3BHK',
       Urgency: 'High'
     });
     assert.equal(result.ok, true, result.error || 'Should accept valid option value');
   });
 
-  test('rejects negative number for positive-number field', () => {
+  test('rejects negative number for positive-number field (BudgetMin)', () => {
     const svcs = makeServices(makeTempDb());
     const { leadId, txnId } = createParents(svcs, '05');
     const result = svcs.reqSvc.createRequirement(txnId, {
@@ -723,17 +718,414 @@ describe('V2RequirementService: server-side form validation', () => {
       TransactionType: 'Purchase',
       Category: 'Residential',
       SubCategory: 'Flat',
-      BudgetMin: -100,  // Must be positive
+      BudgetMin: -100,  // Must be ≥ 0
       BudgetMax: 8000000,
-      Location1: 'Pune',
-      BHKMin: '2BHK',
-      BHKMax: '3BHK',
-      Urgency: 'High'
+      Location1: 'Pune'
     });
-    assert.equal(result.ok, false, 'Should reject negative positive-number field');
+    assert.equal(result.ok, false, 'Should reject negative value for BudgetMin');
     assert.ok(result.error.toLowerCase().includes('positive') || result.error.toLowerCase().includes('budget'),
       `Expected positive/budget error, got: ${result.error}`);
   });
+});
+
+// ── Phase 7: Progressive Requirement Capture (Tests 1–12) ────────────────────
+
+describe('Phase 7: Progressive Requirement Capture', () => {
+  /**
+   * Shared helpers
+   */
+  function makeServices(dbFile) {
+    // Fresh require cache not needed; use the shared test module system
+    const { JsonRepository }       = require('../src/data/repository');
+    const { V2LeadService }        = require('../src/services/v2LeadService');
+    const { V2TransactionService } = require('../src/services/v2TransactionService');
+    const { V2RequirementService } = require('../src/services/v2RequirementService');
+    const repo = new JsonRepository(dbFile);
+    return {
+      repo,
+      leadSvc: new V2LeadService(repo),
+      txnSvc:  new V2TransactionService(repo),
+      reqSvc:  new V2RequirementService(repo)
+    };
+  }
+
+  // ─── TEST 1 ────────────────────────────────────────────────────────────────
+
+  test('TEST 1 — Create Client + Purchase + Residential + Vesu + ₹1Cr with no BHK/Parking/Possession', () => {
+    const svcs = makeServices(makeTempDb());
+
+    // Step 1: Create client (Lead)
+    const leadRes = svcs.leadSvc.createLead({ ClientName: 'Rahul Shah', PrimaryMobile: '9876000001' });
+    assert.equal(leadRes.ok, true, leadRes.error);
+    assert.match(leadRes.data.LeadID, /^L\d{6,}$/);
+
+    // Step 2: Create transaction (what client wants to do)
+    const txnRes = svcs.txnSvc.createTransaction(leadRes.data.LeadID, { TransactionType: 'Purchase' });
+    assert.equal(txnRes.ok, true, txnRes.error);
+
+    // Step 3: Create requirement with ONLY the known information — no BHK, Parking, Possession
+    const reqRes = svcs.reqSvc.createRequirement(txnRes.data.TransactionID, {
+      LeadID:   leadRes.data.LeadID,
+      Category: 'Residential',
+      Location1: 'Vesu',
+      BudgetMax: 10000000  // ₹1 Cr
+      // BHK, Parking, Possession intentionally absent — must remain UNKNOWN
+    });
+
+    assert.equal(reqRes.ok, true, `Minimal creation must succeed. Got: ${reqRes.error}`);
+    assert.match(reqRes.data.RequirementID, /^R\d{6,}$/);
+    assert.equal(reqRes.data.LeadID,        leadRes.data.LeadID);
+    assert.equal(reqRes.data.TransactionID, txnRes.data.TransactionID);
+    assert.equal(reqRes.data.Category, 'Residential');
+    assert.equal(reqRes.data.Location1, 'Vesu');
+    assert.equal(reqRes.data.BudgetMax, 10000000);
+    assert.equal(reqRes.data._v2, true);
+
+    // BHK, Parking, Possession must be UNKNOWN (absent or explicit UNKNOWN state)
+    const fields = reqRes.data.Fields || {};
+    const neitherKnownNorNA = (k) => !fields[k] || fields[k].state === 'UNKNOWN';
+    assert.ok(neitherKnownNorNA('BHK'),        'BHK should be UNKNOWN when not provided');
+    assert.ok(neitherKnownNorNA('Parking'),     'Parking should be UNKNOWN when not provided');
+    assert.ok(neitherKnownNorNA('Possession'),  'Possession should be UNKNOWN when not provided');
+  });
+
+  // ─── TEST 2 ────────────────────────────────────────────────────────────────
+
+  test('TEST 2 — PATCH BHK=3 on same RequirementID', () => {
+    const svcs    = makeServices(makeTempDb());
+    const { lead, txn, reqId } = createMinimalRequirement(svcs, '9876000002');
+
+    const patch = svcs.reqSvc.updateRequirement(reqId, { BHK: 3 });
+
+    assert.equal(patch.ok, true, patch.error);
+    assert.equal(patch.data.requirement.RequirementID, reqId, 'RequirementID must remain the same');
+    const bhkEntry = (patch.data.requirement.Fields || {}).BHK;
+    assert.ok(bhkEntry, 'BHK must appear in Fields map');
+    assert.equal(bhkEntry.state, 'KNOWN');
+    assert.equal(bhkEntry.value, 3);
+  });
+
+  // ─── TEST 3 ────────────────────────────────────────────────────────────────
+
+  test('TEST 3 — PATCH Possession=Ready on same RequirementID', () => {
+    const svcs = makeServices(makeTempDb());
+    const { reqId } = createMinimalRequirement(svcs, '9876000003');
+
+    svcs.reqSvc.updateRequirement(reqId, { BHK: 3 });
+    const patch = svcs.reqSvc.updateRequirement(reqId, { Possession: 'Ready' });
+
+    assert.equal(patch.ok, true, patch.error);
+    assert.equal(patch.data.requirement.RequirementID, reqId);
+    assert.equal(patch.data.requirement.Possession, 'Ready');
+    const possessionEntry = (patch.data.requirement.Fields || {}).Possession;
+    assert.ok(possessionEntry && possessionEntry.state === 'KNOWN', 'Possession must be KNOWN');
+    assert.equal(possessionEntry.value, 'Ready');
+  });
+
+  // ─── TEST 4 ────────────────────────────────────────────────────────────────
+
+  test('TEST 4 — PATCH Parking=2 on same RequirementID', () => {
+    const svcs = makeServices(makeTempDb());
+    const { reqId } = createMinimalRequirement(svcs, '9876000004');
+
+    svcs.reqSvc.updateRequirement(reqId, { BHK: 3 });
+    svcs.reqSvc.updateRequirement(reqId, { Possession: 'Ready' });
+    const patch = svcs.reqSvc.updateRequirement(reqId, { Parking: 2 });
+
+    assert.equal(patch.ok, true, patch.error);
+    assert.equal(patch.data.requirement.RequirementID, reqId);
+    const parkingEntry = (patch.data.requirement.Fields || {}).Parking;
+    assert.ok(parkingEntry && parkingEntry.state === 'KNOWN', 'Parking must be KNOWN');
+    assert.equal(parkingEntry.value, 2);
+  });
+
+  // ─── TEST 5 ────────────────────────────────────────────────────────────────
+
+  test('TEST 5 — Add Location2=City Light on same RequirementID', () => {
+    const svcs = makeServices(makeTempDb());
+    const { reqId } = createMinimalRequirement(svcs, '9876000005');
+
+    svcs.reqSvc.updateRequirement(reqId, { BHK: 3 });
+    svcs.reqSvc.updateRequirement(reqId, { Possession: 'Ready' });
+    svcs.reqSvc.updateRequirement(reqId, { Parking: 2 });
+    const patch = svcs.reqSvc.updateRequirement(reqId, { Location2: 'City Light' });
+
+    assert.equal(patch.ok, true, patch.error);
+    assert.equal(patch.data.requirement.RequirementID, reqId);
+    assert.equal(patch.data.requirement.Location2, 'City Light');
+    const loc2Entry = (patch.data.requirement.Fields || {}).Location2;
+    assert.ok(loc2Entry && loc2Entry.state === 'KNOWN', 'Location2 must be KNOWN');
+    assert.equal(loc2Entry.value, 'City Light');
+    // Location1 must still be intact
+    assert.equal(patch.data.requirement.Location1, 'Vesu');
+  });
+
+  // ─── TEST 6 ────────────────────────────────────────────────────────────────
+
+  test('TEST 6 — Add AvoidLocations=Adajan on same RequirementID', () => {
+    const svcs = makeServices(makeTempDb());
+    const { reqId } = createMinimalRequirement(svcs, '9876000006');
+
+    svcs.reqSvc.updateRequirement(reqId, { BHK: 3 });
+    svcs.reqSvc.updateRequirement(reqId, { Possession: 'Ready' });
+    svcs.reqSvc.updateRequirement(reqId, { Parking: 2 });
+    svcs.reqSvc.updateRequirement(reqId, { Location2: 'City Light' });
+    const patch = svcs.reqSvc.updateRequirement(reqId, { AvoidLocations: 'Adajan' });
+
+    assert.equal(patch.ok, true, patch.error);
+    assert.equal(patch.data.requirement.RequirementID, reqId);
+    assert.equal(patch.data.requirement.AvoidLocations, 'Adajan');
+    const avoidEntry = (patch.data.requirement.Fields || {}).AvoidLocations;
+    assert.ok(avoidEntry && avoidEntry.state === 'KNOWN');
+
+    // Verify cumulative state: all previous patches survived
+    const req = patch.data.requirement;
+    assert.equal((req.Fields.BHK         || {}).value,       3,            'BHK must survive');
+    assert.equal((req.Fields.Possession  || {}).value,       'Ready',      'Possession must survive');
+    assert.equal((req.Fields.Parking     || {}).value,       2,            'Parking must survive');
+    assert.equal((req.Fields.Location2   || {}).value,       'City Light', 'Location2 must survive');
+    assert.equal((req.Fields.AvoidLocations || {}).value,    'Adajan',     'AvoidLocations must be set');
+    // Also verify BudgetMax from original creation still intact
+    assert.equal(req.BudgetMax, 10000000, 'BudgetMax from creation must survive all patches');
+  });
+
+  // ─── TEST 7 ────────────────────────────────────────────────────────────────
+
+  test('TEST 7 — Second Need creates new Transaction+Requirement but SAME LeadID', () => {
+    const svcs = makeServices(makeTempDb());
+    const { lead, txn: txn1, reqId: reqId1 } = createMinimalRequirement(svcs, '9876000007');
+
+    // Same client now wants an office
+    const txn2Res = svcs.txnSvc.createTransaction(lead.LeadID, {
+      TransactionType: 'Rent'
+    });
+    assert.equal(txn2Res.ok, true, txn2Res.error);
+    assert.notEqual(txn2Res.data.TransactionID, txn1.TransactionID, 'Must be a NEW transaction');
+    assert.equal(txn2Res.data.LeadID, lead.LeadID, 'LeadID must be SAME');
+
+    const req2Res = svcs.reqSvc.createRequirement(txn2Res.data.TransactionID, {
+      LeadID:      lead.LeadID,
+      Category:    'Commercial',
+      SubCategory: 'Office',
+      Location1:   'Vesu',
+      BudgetMax:   60000  // ₹60K/month
+    });
+    assert.equal(req2Res.ok, true, req2Res.error);
+    assert.notEqual(req2Res.data.RequirementID, reqId1, 'Must be a NEW requirement ID');
+    assert.equal(req2Res.data.LeadID,           lead.LeadID, 'LeadID on second requirement = same client');
+    assert.equal(req2Res.data.TransactionID,    txn2Res.data.TransactionID);
+    assert.equal(req2Res.data.Category,         'Commercial');
+    assert.equal(req2Res.data.SubCategory,      'Office');
+
+    // Verify the lead has exactly TWO transactions
+    const txns = svcs.txnSvc.listTransactionsByLead(lead.LeadID);
+    assert.equal(txns.length, 2, 'Client must have exactly 2 transactions, not 2 leads');
+    assert.ok(txns.every(t => t.LeadID === lead.LeadID), 'Both transactions belong to same lead');
+
+    // Only ONE lead must exist for this client
+    const db = svcs.repo.read();
+    const clientLeads = (db.Leads || []).filter(l => l.PrimaryMobile === '9876000007' || l.LeadID === lead.LeadID);
+    assert.equal(clientLeads.length, 1, 'Exactly one Lead must exist for this client — never duplicated');
+  });
+
+  // ─── TEST 8 ────────────────────────────────────────────────────────────────
+
+  test('TEST 8 — Requirement LeadID mismatch with Transaction LeadID is rejected', () => {
+    const svcs = makeServices(makeTempDb());
+
+    const lead1Res = svcs.leadSvc.createLead({ ClientName: 'Lead One', PrimaryMobile: '9876000008' });
+    const lead2Res = svcs.leadSvc.createLead({ ClientName: 'Lead Two', PrimaryMobile: '9876000009' });
+    assert.ok(lead1Res.ok && lead2Res.ok);
+
+    const txnRes = svcs.txnSvc.createTransaction(lead1Res.data.LeadID, { TransactionType: 'Purchase' });
+    assert.ok(txnRes.ok);
+
+    // Attempt to assign Requirement to lead2 while Transaction belongs to lead1
+    const result = svcs.reqSvc.createRequirement(txnRes.data.TransactionID, {
+      LeadID:   lead2Res.data.LeadID,   // MISMATCH
+      Location1: 'Surat',
+      BudgetMax: 5000000
+    });
+
+    assert.equal(result.ok, false, 'Must reject LeadID mismatch');
+    assert.ok(result.error.toLowerCase().includes('leadid') || result.error.toLowerCase().includes('lead'),
+      `Expected error about LeadID mismatch, got: ${result.error}`);
+  });
+
+  // ─── TEST 9 ────────────────────────────────────────────────────────────────
+
+  test('TEST 9 — Untouched optional fields remain UNKNOWN after progressive updates', () => {
+    const svcs = makeServices(makeTempDb());
+    const { reqId } = createMinimalRequirement(svcs, '9876000010');
+
+    // Update only BHK
+    const patch = svcs.reqSvc.updateRequirement(reqId, { BHK: 3 });
+    assert.equal(patch.ok, true);
+
+    const fields = patch.data.requirement.Fields || {};
+
+    // BHK is now KNOWN
+    assert.equal((fields.BHK || {}).state, 'KNOWN');
+
+    // These were never touched — must be UNKNOWN (absent or explicit state)
+    const unknownOrAbsent = (k) => !fields[k] || fields[k].state === 'UNKNOWN';
+    assert.ok(unknownOrAbsent('Parking'),    'Parking must remain UNKNOWN');
+    assert.ok(unknownOrAbsent('Possession'), 'Possession must remain UNKNOWN');
+    assert.ok(unknownOrAbsent('Finance'),    'Finance must remain UNKNOWN');
+    assert.ok(unknownOrAbsent('Facing'),     'Facing must remain UNKNOWN');
+    assert.ok(unknownOrAbsent('Floor'),      'Floor must remain UNKNOWN');
+    assert.ok(unknownOrAbsent('Amenities'),  'Amenities must remain UNKNOWN');
+  });
+
+  // ─── TEST 10 ───────────────────────────────────────────────────────────────
+
+  test('TEST 10 — NOT_APPLICABLE state can be stored and is distinct from UNKNOWN', () => {
+    const svcs = makeServices(makeTempDb());
+    const { reqId } = createMinimalRequirement(svcs, '9876000011');
+
+    // Client explicitly says "parking nahi chahiye"
+    const patch = svcs.reqSvc.updateRequirement(reqId, {
+      Fields: {
+        Parking: { state: 'NOT_APPLICABLE' }
+      }
+    });
+
+    assert.equal(patch.ok, true, patch.error);
+
+    const parkingEntry = (patch.data.requirement.Fields || {}).Parking;
+    assert.ok(parkingEntry, 'Parking must appear in Fields map');
+    assert.equal(parkingEntry.state, 'NOT_APPLICABLE',
+      'Parking must be NOT_APPLICABLE, not UNKNOWN');
+
+    // Also test the string sentinel convenience
+    const patch2 = svcs.reqSvc.updateRequirement(reqId, {
+      Possession: 'NOT_APPLICABLE'
+    });
+    assert.equal(patch2.ok, true, patch2.error);
+    const possEntry = (patch2.data.requirement.Fields || {}).Possession;
+    assert.ok(possEntry && possEntry.state === 'NOT_APPLICABLE',
+      'Possession sentinel string must produce NOT_APPLICABLE state');
+
+    // Verify UNKNOWN fields remain distinct
+    const unknown = (k) => !patch2.data.requirement.Fields[k] || patch2.data.requirement.Fields[k].state === 'UNKNOWN';
+    assert.ok(unknown('BHK'),   'BHK (never set) must still be UNKNOWN, not NOT_APPLICABLE');
+    assert.ok(unknown('Facing'), 'Facing (never set) must still be UNKNOWN');
+  });
+
+  // ─── TEST 11 ───────────────────────────────────────────────────────────────
+
+  test('TEST 11 — Requirements survive a repository restart', () => {
+    const dbFile = makeTempDb();
+
+    // Session A: create the requirement
+    const svcsA = makeServices(dbFile);
+    const { lead, txn } = createMinimalRequirement(svcsA, '9876000012');
+    const reqIdA = svcsA.repo.read().Requirements.find(r => r.LeadID === lead.LeadID).RequirementID;
+    svcsA.reqSvc.updateRequirement(reqIdA, { BHK: 3, Possession: 'Ready' });
+    svcsA.reqSvc.updateRequirement(reqIdA, { Location2: 'City Light' });
+
+    // Session B: fresh repository pointing to the same file — simulates restart
+    const { JsonRepository }       = require('../src/data/repository');
+    const { V2RequirementService } = require('../src/services/v2RequirementService');
+    const repoB = new JsonRepository(dbFile);
+    const reqSvcB = new V2RequirementService(repoB);
+
+    const found = reqSvcB.getRequirement(reqIdA);
+    assert.equal(found.ok, true, 'Requirement must be found after restart');
+    assert.equal(found.data.RequirementID, reqIdA);
+    assert.equal(found.data.LeadID, lead.LeadID);
+    assert.equal(found.data.Location1, 'Vesu');
+    assert.equal(found.data.Location2, 'City Light');
+    assert.equal((found.data.Fields.BHK     || {}).value, 3,       'BHK must survive restart');
+    assert.equal((found.data.Fields.Possession || {}).value, 'Ready', 'Possession must survive restart');
+    assert.ok(found.data.history && found.data.history.length >= 2, 'History must survive restart');
+  });
+
+  // ─── TEST 12 ───────────────────────────────────────────────────────────────
+
+  test('TEST 12 — V1 Requirement records remain readable alongside V2 records', () => {
+    const dbFile = makeTempDb();
+    const { JsonRepository }       = require('../src/data/repository');
+    const { V2RequirementService } = require('../src/services/v2RequirementService');
+
+    // Inject a V1-format requirement directly (simulates a legacy record)
+    const repo = new JsonRepository(dbFile);
+    const db   = repo.read();
+    const legacyReq = {
+      // V1 ID format
+      RequirementID:   'REQ-00001',
+      LeadID:          'LEAD-00001',
+      TransactionID:   'TXN-00001',
+      Category:        'Residential',
+      TransactionType: 'Purchase',
+      BudgetMin:       5000000,
+      BudgetMax:       10000000,
+      Location1:       'Surat',
+      Status:          'Active',
+      PipelineStage:   'New',
+      CreatedAt:       '2024-01-01T00:00:00.000Z',
+      // No _v2 flag — this is a legacy record
+    };
+    db.Requirements = db.Requirements || [];
+    db.Requirements.push(legacyReq);
+    repo.write(db);
+
+    // V2 service must still be able to read V1 records
+    const reqSvc = new V2RequirementService(repo);
+    const all    = reqSvc.listAllRequirements();
+    const legacy = all.find(r => r.RequirementID === 'REQ-00001');
+
+    assert.ok(legacy, 'V1 requirement must be visible via listAllRequirements');
+    assert.equal(legacy.Category, 'Residential');
+    assert.equal(legacy.Location1, 'Surat');
+    assert.equal(legacy.BudgetMin, 5000000);
+
+    // Create a V2 requirement alongside — both must coexist
+    const { V2LeadService }        = require('../src/services/v2LeadService');
+    const { V2TransactionService } = require('../src/services/v2TransactionService');
+    const leadSvc = new V2LeadService(repo);
+    const txnSvc  = new V2TransactionService(repo);
+
+    const leadRes = leadSvc.createLead({ ClientName: 'V2 Client', PrimaryMobile: '9876000013' });
+    const txnRes  = txnSvc.createTransaction(leadRes.data.LeadID, { TransactionType: 'Purchase' });
+    const reqRes  = reqSvc.createRequirement(txnRes.data.TransactionID, {
+      LeadID:    leadRes.data.LeadID,
+      Location1: 'Vesu',
+      BudgetMax: 8000000
+    });
+
+    assert.equal(reqRes.ok, true, reqRes.error);
+
+    // Both V1 and V2 visible in list
+    const allAfter = reqSvc.listAllRequirements();
+    assert.ok(allAfter.some(r => r.RequirementID === 'REQ-00001'),    'V1 record must still exist');
+    assert.ok(allAfter.some(r => r.RequirementID === reqRes.data.RequirementID), 'V2 record must exist');
+  });
+
+  // ── Shared setup helper ──────────────────────────────────────────────────
+
+  /**
+   * Creates the minimal Rahul Shah scenario:
+   * Client (Lead) → Purchase Transaction → minimal Requirement (Category=Residential, Vesu, ₹1Cr).
+   * Returns { lead, txn, reqId }.
+   */
+  function createMinimalRequirement(svcs, mobile = '9876000099') {
+    const leadRes = svcs.leadSvc.createLead({ ClientName: 'Rahul Shah', PrimaryMobile: mobile });
+    assert.ok(leadRes.ok, `createLead failed: ${leadRes.error}`);
+
+    const txnRes = svcs.txnSvc.createTransaction(leadRes.data.LeadID, { TransactionType: 'Purchase' });
+    assert.ok(txnRes.ok, `createTransaction failed: ${txnRes.error}`);
+
+    const reqRes = svcs.reqSvc.createRequirement(txnRes.data.TransactionID, {
+      LeadID:    leadRes.data.LeadID,
+      Category:  'Residential',
+      Location1: 'Vesu',
+      BudgetMax: 10000000
+    });
+    assert.ok(reqRes.ok, `createRequirement failed: ${reqRes.error}`);
+
+    return { lead: leadRes.data, txn: txnRes.data, reqId: reqRes.data.RequirementID };
+  }
 });
 
 // ── Migration: dry-run is non-mutating ────────────────────────────────────────
