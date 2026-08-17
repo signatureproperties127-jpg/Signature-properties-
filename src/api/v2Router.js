@@ -38,6 +38,7 @@ const { V2RequirementService }   = require('../services/v2RequirementService');
 const { V2ConfigService }        = require('../services/v2ConfigService');
 const { V2FormRegistryService }  = require('../services/v2FormRegistryService');
 const { V2DependencyService }    = require('../services/v2DependencyService');
+const { V2NextQuestionService }  = require('../services/v2NextQuestionService');
 const { EntityConfig, TagConfig, WorkflowConfig, ScoringConfig, ColumnConfig, V2FormRegistry, SourceOptions } = require('../data/v2Config');
 
 // ── Feature Flag ──────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ class V2Router {
     this.configSvc    = new V2ConfigService(repository);
     this.registrySvc  = new V2FormRegistryService(repository, this.configSvc);
     this.depSvc       = new V2DependencyService(repository, this.registrySvc);
+    this.nextQSvc     = new V2NextQuestionService(repository, this.depSvc, this.configSvc);
     this.repo         = repository;
 
     // Phase 8: seed FieldConfig and QuestionConfig on startup (idempotent)
@@ -243,6 +245,17 @@ class V2Router {
       if (active !== null && active !== undefined) filters.isActive = active !== 'false';
       const data = this.registrySvc.getAllForms(filters);
       return this._ok({ ok: true, data, count: data.length });
+    }
+
+    // ── Phase 11: Next Question Engine routes ────────────────────────────────
+
+    // GET /api/v2/requirements/:requirementId/next-questions
+    const nextQMatch = pathname.match(/^\/api\/v2\/requirements\/([^/]+)\/next-questions$/);
+    if (nextQMatch && method === 'GET') {
+      const requirementId = nextQMatch[1];
+      const limit         = url.searchParams.get('limit');
+      const result        = this.nextQSvc.getNextQuestions(requirementId, { limit });
+      return this._json(result.ok ? 200 : 404, result);
     }
 
     // ── Phase 10: Dependency Engine routes ───────────────────────────────────

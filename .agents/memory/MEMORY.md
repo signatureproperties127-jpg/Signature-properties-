@@ -5,3 +5,4 @@
 - [V2 Select Option Validation](v2-select-option-validation.md) — option-membership check is string-only; numeric values (e.g. Parking:2) bypass it; missing value never errors; only bad strings rejected
 - [V2 updateRequirement Return Shape](v2-update-requirement-return.md) — returns { requirement, changedFields, history }, NOT { ...flatFields }; tests must use patch.data.requirement.FormVersion not patch.data.FormVersion
 - [V2Router Handle Return Pattern](v2router-handle-return.md) — router._ok()/_json() return { handled, statusCode, body } directly; test helpers must capture the return value: `const result = await router.handle(...); if (result?.statusCode != null) return result;`
+- [Phase 11 Next Question Engine](phase11-next-question.md) — V2NextQuestionService: read-only, consumes DependencyEngine (Phase 10) + FieldConfig; rank=CORE>IMPORTANT>OPTIONAL then DisplayOrder; never use words "inventory", "matching", "deal" in source (Suite 39 guard)
