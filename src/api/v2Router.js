@@ -37,6 +37,7 @@ const { V2TransactionService }   = require('../services/v2TransactionService');
 const { V2RequirementService }   = require('../services/v2RequirementService');
 const { V2ConfigService }        = require('../services/v2ConfigService');
 const { V2FormRegistryService }  = require('../services/v2FormRegistryService');
+const { V2DependencyService }    = require('../services/v2DependencyService');
 const { EntityConfig, TagConfig, WorkflowConfig, ScoringConfig, ColumnConfig, V2FormRegistry, SourceOptions } = require('../data/v2Config');
 
 // ── Feature Flag ──────────────────────────────────────────────────────────────
@@ -53,12 +54,15 @@ class V2Router {
     this.reqSvc       = new V2RequirementService(repository);
     this.configSvc    = new V2ConfigService(repository);
     this.registrySvc  = new V2FormRegistryService(repository, this.configSvc);
+    this.depSvc       = new V2DependencyService(repository, this.registrySvc);
     this.repo         = repository;
 
     // Phase 8: seed FieldConfig and QuestionConfig on startup (idempotent)
     this.configSvc.seedConfigIfEmpty();
     // Phase 9: seed FormRegistry on startup (idempotent)
     this.registrySvc.seedFormRegistryIfEmpty();
+    // Phase 10: seed DependencyConfig on startup (idempotent)
+    this.depSvc.seedDependencyConfigIfEmpty();
   }
 
   /**
@@ -238,6 +242,51 @@ class V2Router {
       if (sub)    filters.subCategory     = sub;
       if (active !== null && active !== undefined) filters.isActive = active !== 'false';
       const data = this.registrySvc.getAllForms(filters);
+      return this._ok({ ok: true, data, count: data.length });
+    }
+
+    // ── Phase 10: Dependency Engine routes ───────────────────────────────────
+
+    // GET /api/v2/dependencies/evaluate — evaluate field states for a context or requirementId
+    if (pathname === '/api/v2/dependencies/evaluate' && method === 'GET') {
+      const requirementId  = url.searchParams.get('requirementId');
+      const txnType        = url.searchParams.get('transactionType') || url.searchParams.get('txnType');
+      const category       = url.searchParams.get('category');
+      const subCategory    = url.searchParams.get('subCategory') || url.searchParams.get('subcategory');
+
+      if (requirementId) {
+        // DB-backed evaluation from stored Requirement
+        const result = this.depSvc.evaluateDependencies(requirementId);
+        return this._json(result.ok ? 200 : 404, result);
+      }
+
+      // Direct context evaluation
+      if (!txnType && !category) {
+        return this._json(400, { ok: false, error: 'Provide requirementId or at least transactionType / category' });
+      }
+      const ctx = {
+        transactionType: txnType    || null,
+        category:        category   || null,
+        subCategory:     subCategory || null,
+        fields:          {}
+      };
+      const result = this.depSvc.evaluateContext(ctx);
+      return this._json(result.ok ? 200 : 400, result);
+    }
+
+    // GET /api/v2/dependencies — list all active dependency rules
+    if (pathname === '/api/v2/dependencies' && method === 'GET') {
+      const txnType    = url.searchParams.get('transactionType') || url.searchParams.get('txnType');
+      const category   = url.searchParams.get('category');
+      const subCat     = url.searchParams.get('subCategory') || url.searchParams.get('subcategory');
+      const target     = url.searchParams.get('targetField');
+      const activeOnly = url.searchParams.get('active') !== 'false';
+      const filters    = { isActive: activeOnly };
+      if (txnType)   filters.transactionType = txnType;
+      if (category)  filters.category        = category;
+      if (subCat)    filters.subCategory     = subCat;
+      if (target)    filters.targetField     = target;
+      const data = this.depSvc.getDependencyRules(filters);
       return this._ok({ ok: true, data, count: data.length });
     }
 
