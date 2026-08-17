@@ -1,0 +1,37 @@
+{
+  "migrationVersion": "18.0",
+  "mode": "apply",
+  "timestamp": "2026-08-17T19:51:40.804Z",
+  "backupPath": "/home/runner/workspace/data/backups/sig-realty-db-backup-2026-08-17T19-51-40-808Z.json",
+  "scanned": {
+    "leads": 2,
+    "transactions": 1,
+    "requirements": 1
+  },
+  "eligible": {
+    "leads": 2,
+    "transactions": 1,
+    "requirements": 1
+  },
+  "migrated": {
+    "leads": 2,
+    "transactions": 1,
+    "requirements": 1
+  },
+  "skipped": {
+    "leads": 0,
+    "transactions": 0,
+    "requirements": 0
+  },
+  "duplicates": [],
+  "relationshipErrors": [],
+  "fieldWarnings": [
+    {
+      "RequirementID": "REQ-0001",
+      "warnings": [
+        "No FormVersion — migration version will be noted but not assigned"
+      ]
+    }
+  ],
+  "manualReview": []
+}

@@ -81,6 +81,7 @@ class JsonRepository {
         V2QuestionConfig: [],
         V2FormRegistry: [],
         V2DependencyConfig: [],
+        V2ScoringConfig: [],
         RequirementHistory: [],
         _V2Counters: { Lead: 0, Transaction: 0, Requirement: 0 }
       };

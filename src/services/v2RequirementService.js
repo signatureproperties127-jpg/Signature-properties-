@@ -171,9 +171,10 @@ function computeCompleteness(fields) {
 }
 
 class V2RequirementService {
-  constructor(repository) {
+  constructor(repository, scoringService) {
     if (!repository) throw new Error('V2RequirementService requires a repository');
     this.repository = repository;
+    this.scoringSvc = scoringService || null;
     this.idEngine   = new IdEngine(repository);
   }
 
@@ -345,9 +346,7 @@ class V2RequirementService {
       _v2:        true
     };
 
-    const score = this._computeRequirementScore(requirement);
-    requirement.RequirementScore = score.total;
-    requirement.ScoreBreakdown   = score.breakdown;
+    this._applyScore(requirement);
 
     // Re-read DB fresh so we do NOT overwrite the counter that idEngine just wrote
     const db = this.repository.read();
@@ -533,9 +532,7 @@ class V2RequirementService {
     };
 
     // Recompute score
-    const score = this._computeRequirementScore(updated);
-    updated.RequirementScore = score.total;
-    updated.ScoreBreakdown   = score.breakdown;
+    this._applyScore(updated);
 
     db.Requirements[idx] = updated;
 
@@ -762,6 +759,24 @@ class V2RequirementService {
     const fMax = fmt(max);
     if (fMin && fMax) return `${fMin} – ${fMax}`;
     return fMin || fMax || null;
+  }
+
+  /**
+   * Apply scoring to a requirement in-place.
+   * Uses V2ScoringService if injected, falls back to legacy _computeRequirementScore.
+   */
+  _applyScore(req) {
+    if (this.scoringSvc) {
+      const result = this.scoringSvc.calculateRequirementScore(req);
+      req.RequirementScore          = result.ok ? result.score : 0;
+      req.ScoreBreakdown            = result.ok ? result      : null;
+      req.ScoreCalculationVersion   = result.ok ? result.calculationVersion : null;
+      req.ScoreCalculatedAt         = result.ok ? result.calculatedAt       : null;
+    } else {
+      const score = this._computeRequirementScore(req);
+      req.RequirementScore = score.total;
+      req.ScoreBreakdown   = score.breakdown;
+    }
   }
 
   _computeRequirementScore(req) {

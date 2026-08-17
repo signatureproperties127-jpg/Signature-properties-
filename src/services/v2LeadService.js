@@ -39,9 +39,10 @@ function normalizeName(raw) {
 // ─── V2 Lead Service ──────────────────────────────────────────────────────────
 
 class V2LeadService {
-  constructor(repository) {
+  constructor(repository, scoringService) {
     if (!repository) throw new Error('V2LeadService requires a repository');
     this.repository = repository;
+    this.scoringSvc = scoringService || null;
     this.idEngine   = new IdEngine(repository);
   }
 
@@ -185,7 +186,7 @@ class V2LeadService {
     };
 
     // Compute initial score
-    lead.ClientScore = this._computeClientScore(lead, 0, 0);
+    this._applyClientScore(lead, 0, 0);
     lead.RecordHash  = this._hash(lead);
 
     const db = this.repository.read();
@@ -280,12 +281,14 @@ class V2LeadService {
     const txnCount = (db.Transactions || []).filter((t) => t.LeadID === leadId).length;
     const reqCount = (db.Requirements || []).filter((r) => r.LeadID === leadId).length;
 
-    const score = this._computeClientScore(lead, txnCount, reqCount);
-    leads[idx]  = { ...lead, ClientScore: score, UpdatedAt: new Date().toISOString() };
+    const updated = { ...lead };
+    this._applyClientScore(updated, txnCount, reqCount);
+    updated.UpdatedAt = new Date().toISOString();
+    leads[idx]  = updated;
     db.Leads    = leads;
     this.repository.write(db);
 
-    return { ok: true, data: { LeadID: leadId, ClientScore: score } };
+    return { ok: true, data: { LeadID: leadId, ClientScore: updated.ClientScore } };
   }
 
   // ── Tag Helpers ────────────────────────────────────────────────────────────
@@ -386,6 +389,23 @@ class V2LeadService {
   }
 
   // ── Scoring ────────────────────────────────────────────────────────────────
+
+  /**
+   * Apply scoring to a lead in-place.
+   * Uses V2ScoringService if injected, falls back to legacy _computeClientScore.
+   */
+  _applyClientScore(lead, txnCount, reqCount) {
+    if (this.scoringSvc) {
+      const result = this.scoringSvc.calculateClientScore(lead, txnCount, reqCount);
+      lead.ClientScore                   = result.ok ? result.score : 0;
+      lead.ClientScoreBreakdown          = result.ok ? result      : null;
+      lead.ClientScoreCalculationVersion = result.ok ? result.calculationVersion : null;
+      lead.ClientScoreCalculatedAt       = result.ok ? result.calculatedAt       : null;
+    } else {
+      const score = this._computeClientScore(lead, txnCount, reqCount);
+      lead.ClientScore = typeof score === 'object' ? score.total : score;
+    }
+  }
 
   _computeClientScore(lead, txnCount, reqCount) {
     const cfg   = ScoringConfig.client;

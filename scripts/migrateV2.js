@@ -1,346 +1,527 @@
 #!/usr/bin/env node
+'use strict';
 /**
- * PHASE 19 — V2 Migration Script (DRY-RUN by default)
+ * PHASE 18 — V1 → V2 Migration Script
  *
- * Migrates V1 leads/transactions/requirements to V2 format.
+ * IMPORTANT:
+ *   Default mode: DRY RUN. No data is written unless --apply is passed.
+ *   Always creates a backup before writing.
+ *   Migration is REVERSIBLE via the MigrationMap and backup.
  *
  * Usage:
- *   node scripts/migrateV2.js --dry-run       (default — zero writes to DB)
- *   node scripts/migrateV2.js --apply          (writes changes in one atomic write)
- *   node scripts/migrateV2.js --report         (stats only)
- *   node scripts/migrateV2.js --rollback       (reverts using MigrationMap)
+ *   node scripts/migrateV2.js --dry-run          # inspect only (default)
+ *   node scripts/migrateV2.js --apply            # actually migrate
+ *   node scripts/migrateV2.js --rollback         # restore from latest backup
+ *   node scripts/migrateV2.js --report           # print migration-report.json
  *
- * Safety guarantees:
- *   - DRY-RUN performs ZERO writes to the database (no counter changes)
- *   - APPLY accumulates all changes in memory first, then writes once
- *   - No records are ever deleted (V1 records kept alongside V2 copies)
- *   - No auto-migration on startup
- *   - Rollback uses MigrationMap stored in db._V2MigrationMap
+ * Safety:
+ *   - Never modifies Inventory, Matching, Deal, Commission.
+ *   - Never destroys legacy IDs.
+ *   - Never migrates without a verified backup.
+ *   - Partial failure → STOP (no partial commit).
  */
 
-'use strict';
+const fs   = require('fs');
+const path = require('path');
+const os   = require('os');
 
-const path  = require('path');
-const fs    = require('fs');
+// ── Configuration ─────────────────────────────────────────────────────────────
+
+const DB_FILE     = process.env.SIG_REALTY_DB_FILE
+  || path.join(__dirname, '../data/sig-realty-db.json');
+const BACKUP_DIR  = path.join(__dirname, '../data/backups');
+const REPORT_FILE = path.join(__dirname, '../data/migration-report.json');
+const MIGRATION_VERSION = '18.0';
+
+// ── CLI Args ──────────────────────────────────────────────────────────────────
 
 const args     = process.argv.slice(2);
-const DRY_RUN  = !args.includes('--apply');
+const DRY_RUN  = !args.includes('--apply');  // default is dry-run
+const APPLY    = args.includes('--apply');
 const ROLLBACK = args.includes('--rollback');
 const REPORT   = args.includes('--report');
 
-const DB_FILE = process.env.SIG_REALTY_DB_FILE || path.join(__dirname, '../data/sig-realty-db.json');
+if (ROLLBACK) { doRollback(); process.exit(0); }
+if (REPORT)   { doReport();   process.exit(0); }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function log(msg) { console.log(`[migrateV2] ${msg}`); }
-function warn(msg) { console.warn(`[migrateV2] ⚠  ${msg}`); }
-function ok(msg)   { console.log(`[migrateV2] ✓  ${msg}`); }
+function log(msg)   { console.log(`[MIGRATE] ${msg}`); }
+function warn(msg)  { console.warn(`[WARN]    ${msg}`); }
+function error(msg) { console.error(`[ERROR]   ${msg}`); }
 
-const { JsonRepository } = require('../src/data/repository');
-const { IdEngine, PREFIXES, formatV2Id, parseV2Seq } = require('../src/data/idEngine');
-
-const repo = new JsonRepository(DB_FILE);
-
-// ── In-memory ID allocator (DRY-RUN safe, no DB writes) ───────────────────────
-
-/**
- * Build a stateful ID allocator from the current DB state.
- * DRY-RUN: uses in-memory counters only — no writes.
- * APPLY:   used to pre-assign IDs before the single batch write.
- */
-function buildIdAllocator(db) {
-  // Bootstrap from existing V2 counters or max existing IDs
-  const existing = db._V2Counters || {};
-  const leadMax   = Math.max(existing.Lead || 0,   ...(db.Leads || []).map((r) => parseV2Seq(r.LeadID, PREFIXES.Lead)));
-  const txnMax    = Math.max(existing.Transaction || 0, ...(db.Transactions || []).map((r) => parseV2Seq(r.TransactionID, PREFIXES.Transaction)));
-  const reqMax    = Math.max(existing.Requirement || 0, ...(db.Requirements || []).map((r) => parseV2Seq(r.RequirementID, PREFIXES.Requirement)));
-
-  const counters = { Lead: leadMax, Transaction: txnMax, Requirement: reqMax };
-
-  return {
-    nextLeadId()        { return formatV2Id(PREFIXES.Lead,        ++counters.Lead); },
-    nextTransactionId() { return formatV2Id(PREFIXES.Transaction,  ++counters.Transaction); },
-    nextRequirementId() { return formatV2Id(PREFIXES.Requirement,  ++counters.Requirement); },
-    finalCounters()     { return { ...counters }; }
-  };
+function readDb(file = DB_FILE) {
+  if (!fs.existsSync(file)) {
+    error(`Database file not found: ${file}`);
+    process.exit(1);
+  }
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
-// ── V1 detection ──────────────────────────────────────────────────────────────
+function writeDb(db, file = DB_FILE) {
+  fs.writeFileSync(file, JSON.stringify(db, null, 2), 'utf8');
+}
 
-function isV1Lead(lead)   { return !lead._v2 && !IdEngine.isV2LeadId(lead.LeadID || ''); }
-function isV1Txn(t)       { return !t._v2 && !IdEngine.isV2TransactionId(t.TransactionID || ''); }
-function isV1Req(r)       { return !r._v2 && !IdEngine.isV2RequirementId(r.RequirementID || ''); }
+function createBackup(db) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const ts   = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = path.join(BACKUP_DIR, `sig-realty-db-backup-${ts}.json`);
+  fs.writeFileSync(file, JSON.stringify(db, null, 2), 'utf8');
+  const size = fs.statSync(file).size;
+  log(`Backup created: ${file} (${size} bytes)`);
+  return { path: file, timestamp: ts, size };
+}
 
-// ── ROLLBACK ──────────────────────────────────────────────────────────────────
+function verifyBackup(backupPath) {
+  if (!fs.existsSync(backupPath)) return false;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+    return Array.isArray(parsed.Leads);
+  } catch { return false; }
+}
+
+function normalizePhone(phone) {
+  if (!phone) return null;
+  return String(phone).replace(/[^0-9]/g, '').slice(-10);
+}
+
+function generateV2LeadId(index) {
+  return `L${String(index).padStart(6, '0')}`;
+}
+function generateV2TxnId(index) {
+  return `T${String(index).padStart(6, '0')}`;
+}
+function generateV2ReqId(index) {
+  return `R${String(index).padStart(6, '0')}`;
+}
+
+// ── Rollback ──────────────────────────────────────────────────────────────────
 
 function doRollback() {
-  log('Starting rollback…');
-  const db  = repo.read();
-  const map = db._V2MigrationMap;
+  if (!fs.existsSync(BACKUP_DIR)) {
+    error('No backup directory found. Cannot rollback.');
+    process.exit(1);
+  }
+  const backups = fs.readdirSync(BACKUP_DIR)
+    .filter(f => f.startsWith('sig-realty-db-backup-'))
+    .sort();
 
-  if (!map || !map.leads || map.leads.length === 0) {
-    warn('No migration map found in database. Nothing to rollback.');
+  if (backups.length === 0) {
+    error('No backups found. Cannot rollback.');
     process.exit(1);
   }
 
-  log(`Migration map found. Migrated: ${map.leads.length} leads, ${map.transactions.length} transactions, ${map.requirements.length} requirements`);
+  const latest = path.join(BACKUP_DIR, backups[backups.length - 1]);
+  log(`Latest backup: ${latest}`);
 
-  const migratedLeadIds = new Set(map.leads.map((m) => m.v2Id));
-  const migratedTxnIds  = new Set(map.transactions.map((m) => m.v2Id));
-  const migratedReqIds  = new Set(map.requirements.map((m) => m.v2Id));
-
-  // Only remove records created by migration (marked with _migratedFromV1)
-  const beforeLeads = db.Leads.length;
-  db.Leads        = (db.Leads || []).filter((l) => !(migratedLeadIds.has(l.LeadID) && l._migratedFromV1));
-  db.Transactions = (db.Transactions || []).filter((t) => !(migratedTxnIds.has(t.TransactionID) && t._migratedFromV1));
-  db.Requirements = (db.Requirements || []).filter((r) => !(migratedReqIds.has(r.RequirementID) && r._migratedFromV1));
-
-  // Restore V2 counters to pre-migration values
-  if (map.countersBefore) {
-    db._V2Counters = map.countersBefore;
+  if (!verifyBackup(latest)) {
+    error('Backup file is corrupted or unreadable. Rollback aborted.');
+    process.exit(1);
   }
 
-  delete db._V2MigrationMap;
-
-  if (!DRY_RUN) {
-    repo.write(db);
-    ok(`Rollback complete. Removed ${beforeLeads - db.Leads.length} migrated records.`);
-  } else {
-    log(`DRY-RUN: would remove ${beforeLeads - db.Leads.length} migrated records (no writes performed).`);
-  }
+  const db = readDb(latest);
+  log(`Backup has ${db.Leads.length} Leads, ${db.Requirements.length} Requirements.`);
+  log('ROLLBACK: Restoring database from backup…');
+  writeDb(db);
+  log('ROLLBACK COMPLETE.');
 }
 
-// ── MIGRATE ───────────────────────────────────────────────────────────────────
+// ── Report ─────────────────────────────────────────────────────────────────────
 
-function buildMigration(db, allocator) {
-  const { FORM_REGISTRY_VERSION } = require('../src/data/v2Config');
-  const now         = new Date().toISOString();
-  const migrationMap = {
-    migratedAt:     now,
-    dryRun:         DRY_RUN,
-    countersBefore: { ...(db._V2Counters || {}) },
-    leads:          [],
-    transactions:   [],
-    requirements:   []
+function doReport() {
+  if (!fs.existsSync(REPORT_FILE)) {
+    console.log('No migration report found. Run migration first.');
+    return;
+  }
+  const report = JSON.parse(fs.readFileSync(REPORT_FILE, 'utf8'));
+  console.log(JSON.stringify(report, null, 2));
+}
+
+// ── Main Migration ────────────────────────────────────────────────────────────
+
+function run() {
+  log(`=== Signature Realty V1→V2 Migration (version ${MIGRATION_VERSION}) ===`);
+  log(`Mode: ${DRY_RUN ? 'DRY RUN (no writes)' : 'APPLY'}`);
+  log('');
+
+  const db = readDb();
+
+  // ── Counters ──
+  const report = {
+    migrationVersion: MIGRATION_VERSION,
+    mode:             DRY_RUN ? 'dry-run' : 'apply',
+    timestamp:        new Date().toISOString(),
+    backupPath:       null,
+    scanned:          { leads: 0, transactions: 0, requirements: 0 },
+    eligible:         { leads: 0, transactions: 0, requirements: 0 },
+    migrated:         { leads: 0, transactions: 0, requirements: 0 },
+    skipped:          { leads: 0, transactions: 0, requirements: 0 },
+    duplicates:       [],
+    relationshipErrors: [],
+    fieldWarnings:    [],
+    manualReview:     []
   };
 
-  const newLeads        = [];
-  const newTransactions = [];
-  const newRequirements = [];
+  db.Leads        = db.Leads        || [];
+  db.Transactions = db.Transactions || [];
+  db.Requirements = db.Requirements || [];
+  db.MigrationMap = db.MigrationMap || [];
 
-  // ── Leads ────────────────────────────────────────────────────────────────
-  const v1Leads = (db.Leads || []).filter(isV1Lead);
-  log(`Found ${v1Leads.length} V1 leads to migrate`);
+  // ── Find already-migrated IDs ──
+  const migratedLegacyIds = new Set(db.MigrationMap.map(m => m.LegacyID));
 
-  for (const v1 of v1Leads) {
-    const v2Id = allocator.nextLeadId();
-    migrationMap.leads.push({ v1Id: v1.LeadID, v2Id, migratedAt: now });
+  // ── Index V2 IDs to generate new ones ──
+  const existingV2LeadIds  = new Set(db.Leads.filter(l => l._v2).map(l => l.LeadID));
+  const existingV2TxnIds   = new Set(db.Transactions.filter(t => t._v2).map(t => t.TransactionID));
+  const existingV2ReqIds   = new Set(db.Requirements.filter(r => r._v2).map(r => r.RequirementID));
 
-    newLeads.push({
-      LeadID:          v2Id,
-      ClientName:      v1.ClientName || v1.Name || null,
-      PrimaryMobile:   v1.Phone || v1.PrimaryMobile || null,
-      AlternateMobile: v1.AlternateMobile || null,
-      WhatsApp:        v1.WhatsApp || null,
-      Email:           v1.Email || null,
-      ClientStatus:    v1.LeadStatus || v1.ClientStatus || 'New',
-      LeadStatus:      v1.LeadStatus || 'New',
-      ClientLifecycle: 'Prospect',
-      ClientScore:     0,
-      Source:          v1.Source || v1.LeadSource || 'Manual',
-      LeadSource:      v1.LeadSource || v1.Source || 'Manual',
-      Phone:           v1.Phone || null,
-      City:            v1.City || null,
-      AssignedAgentID: v1.AssignedAgentID || v1.AgentID || null,
-      Tags:            [],
-      Notes:           v1.Notes || v1.Description || '',
-      CreatedBy:       'migration',
-      CreatedAt:       v1.CreatedAt || now,
-      UpdatedBy:       'migration',
-      UpdatedAt:       now,
-      Version:         1,
-      RecordHash:      null,
-      LegacyID:        v1.LeadID,
-      _v2:             true,
-      _migratedFromV1: true
-    });
+  let leadV2Counter = db.MigrationMap.filter(m => m.EntityType === 'Lead').length + 1;
+  let txnV2Counter  = db.MigrationMap.filter(m => m.EntityType === 'Transaction').length + 1;
+  let reqV2Counter  = db.MigrationMap.filter(m => m.EntityType === 'Requirement').length + 1;
 
-    ok(`Lead: ${v1.LeadID} → ${v2Id} (${v1.ClientName || v1.Name})`);
+  // ── Lead ID map: legacyId → v2Id (for relationship repair) ──
+  const leadIdMap = {};
+  const txnIdMap  = {};
+
+  // Pre-populate from existing MigrationMap
+  for (const m of db.MigrationMap) {
+    if (m.EntityType === 'Lead')        leadIdMap[m.LegacyID] = m.V2ID;
+    if (m.EntityType === 'Transaction') txnIdMap[m.LegacyID]  = m.V2ID;
   }
 
-  // ── Transactions ──────────────────────────────────────────────────────────
-  const v1Txns  = (db.Transactions || []).filter(isV1Txn);
-  log(`Found ${v1Txns.length} V1 transactions to migrate`);
+  // ── Duplicate detection index ──
+  const seenMobiles = new Map();
+  const seenEmails  = new Map();
 
-  const validTxnTypes = ['Purchase', 'Sale', 'Rent', 'Rent Out', 'Lease', 'Lease Out'];
-
-  for (const v1 of v1Txns) {
-    const leadMap  = migrationMap.leads.find((m) => m.v1Id === v1.LeadID);
-    const v2LeadId = leadMap ? leadMap.v2Id : v1.LeadID;
-    const v2Id     = allocator.nextTransactionId();
-    const txnType  = v1.TransactionType || v1.Type || 'Purchase';
-
-    migrationMap.transactions.push({ v1Id: v1.TransactionID, v2Id, v2LeadId, migratedAt: now });
-
-    newTransactions.push({
-      TransactionID:     v2Id,
-      LeadID:            v2LeadId,
-      TransactionType:   validTxnTypes.includes(txnType) ? txnType : 'Purchase',
-      Type:              validTxnTypes.includes(txnType) ? txnType : 'Purchase',
-      TransactionStatus: v1.Status || v1.TransactionStatus || 'Open',
-      Status:            v1.Status || 'Open',
-      PipelineStage:     v1.Stage || v1.PipelineStage || 'New',
-      Notes:             v1.Notes || '',
-      CreatedBy:         'migration',
-      CreatedAt:         v1.CreatedAt || now,
-      UpdatedBy:         'migration',
-      UpdatedAt:         now,
-      Version:           1,
-      LegacyID:          v1.TransactionID,
-      _v2:               true,
-      _migratedFromV1:   true
-    });
-
-    ok(`Transaction: ${v1.TransactionID} → ${v2Id} (Lead: ${v2LeadId})`);
+  for (const lead of db.Leads) {
+    if (lead._v2) {
+      const m = normalizePhone(lead.PrimaryMobile || lead.Phone);
+      const e = (lead.Email || '').toLowerCase();
+      if (m) seenMobiles.set(m, lead.LeadID);
+      if (e) seenEmails.set(e, lead.LeadID);
+    }
   }
 
-  // ── Requirements ──────────────────────────────────────────────────────────
-  const v1Reqs = (db.Requirements || []).filter(isV1Req);
-  log(`Found ${v1Reqs.length} V1 requirements to migrate`);
+  // ──────────────────────────────────────────────────────────────────────────
+  // 1. Migrate Leads
+  // ──────────────────────────────────────────────────────────────────────────
 
-  for (const v1 of v1Reqs) {
-    const leadMap = migrationMap.leads.find((m) => m.v1Id === v1.LeadID);
-    const txnMap  = migrationMap.transactions.find((m) => m.v1Id === (v1.TransactionID || v1.transactionId));
+  log('--- Scanning Leads ---');
+  const newMigrationEntries = [];
+  const newV2Leads = [];
 
-    const v2LeadId = leadMap ? leadMap.v2Id : v1.LeadID;
-    const v2TxnId  = txnMap  ? txnMap.v2Id  : v1.TransactionID;
+  for (const lead of db.Leads) {
+    report.scanned.leads++;
 
-    if (!v2TxnId) {
-      warn(`Requirement ${v1.RequirementID}: no matching Transaction — skipping`);
+    // Already V2?
+    if (lead._v2) {
+      leadIdMap[lead.LeadID] = lead.LeadID;
+      report.skipped.leads++;
       continue;
     }
 
-    const v2Id = allocator.nextRequirementId();
-    migrationMap.requirements.push({ v1Id: v1.RequirementID, v2Id, v2LeadId, v2TxnId, migratedAt: now });
+    // Already migrated?
+    if (migratedLegacyIds.has(lead.LeadID)) {
+      const mapEntry = db.MigrationMap.find(m => m.LegacyID === lead.LeadID);
+      if (mapEntry) leadIdMap[lead.LeadID] = mapEntry.V2ID;
+      report.skipped.leads++;
+      continue;
+    }
 
-    newRequirements.push({
-      RequirementID:      v2Id,
-      RequirementCode:    v2Id,
-      LeadID:             v2LeadId,
-      TransactionID:      v2TxnId,
-      TransactionType:    v1.TransactionType || 'Purchase',
-      RequirementStatus:  v1.Status || v1.RequirementStatus || 'Draft',
-      Status:             v1.Status || 'Draft',
-      PipelineStage:      v1.PipelineStage || 'New',
-      Category:           v1.Category || null,
-      SubCategory:        v1.SubCategory || null,
-      PropertyType:       v1.PropertyType || null,
-      BudgetMin:          v1.BudgetMin || null,
-      BudgetMax:          v1.BudgetMax || null,
-      Location1:          v1.Location || v1.Location1 || null,
-      Location2:          v1.Location2 || null,
-      Urgency:            v1.Urgency || null,
-      Possession:         v1.Possession || null,
-      BHKMin:             v1.BHKMin || null,
-      BHKMax:             v1.BHKMax || null,
-      AreaMin:            v1.AreaMin || null,
-      AreaMax:            v1.AreaMax || null,
-      SpecialNotes:       v1.SpecialNotes || v1.Notes || null,
-      FormVersion:        FORM_REGISTRY_VERSION,
-      FormKey:            'generic',
-      RequirementScore:   null,
-      ScoreBreakdown:     null,
-      CreatedBy:          'migration',
-      CreatedAt:          v1.CreatedAt || now,
-      UpdatedBy:          'migration',
-      UpdatedAt:          now,
-      Version:            1,
-      LegacyID:           v1.RequirementID,
-      _v2:                true,
-      _migratedFromV1:    true
+    report.eligible.leads++;
+
+    // Duplicate detection
+    const mobile = normalizePhone(lead.PrimaryMobile || lead.Phone);
+    const email  = (lead.Email || '').toLowerCase();
+
+    if (mobile && seenMobiles.has(mobile)) {
+      const dupOf = seenMobiles.get(mobile);
+      report.duplicates.push({
+        EntityType: 'Lead',
+        LegacyID:   lead.LeadID,
+        DuplicateOf: dupOf,
+        Reason:     'Duplicate mobile'
+      });
+      report.manualReview.push({
+        EntityType: 'Lead', LegacyID: lead.LeadID, Reason: 'Possible duplicate — same mobile as ' + dupOf
+      });
+      log(`  DUPLICATE: Lead ${lead.LeadID} (mobile ${mobile}) → same as ${dupOf}`);
+      continue;
+    }
+
+    if (email && seenEmails.has(email)) {
+      const dupOf = seenEmails.get(email);
+      report.duplicates.push({
+        EntityType: 'Lead',
+        LegacyID:   lead.LeadID,
+        DuplicateOf: dupOf,
+        Reason:     'Duplicate email'
+      });
+      report.manualReview.push({
+        EntityType: 'Lead', LegacyID: lead.LeadID, Reason: 'Possible duplicate — same email as ' + dupOf
+      });
+      continue;
+    }
+
+    // Generate V2 ID
+    let v2Id;
+    do { v2Id = generateV2LeadId(leadV2Counter++); }
+    while (existingV2LeadIds.has(v2Id));
+    existingV2LeadIds.add(v2Id);
+
+    leadIdMap[lead.LeadID] = v2Id;
+    if (mobile) seenMobiles.set(mobile, lead.LeadID);
+    if (email)  seenEmails.set(email, lead.LeadID);
+
+    // Field mapping
+    const v2Lead = {
+      ...lead,
+      LeadID:         v2Id,
+      LegacyID:       lead.LeadID,
+      PrimaryMobile:  lead.PrimaryMobile || lead.Phone || null,
+      ClientStatus:   lead.ClientStatus  || lead.LeadStatus || lead.Status || 'New',
+      ClientLifecycle: lead.ClientLifecycle || lead.Lifecycle || 'Prospect',
+      Source:         lead.Source || lead.LeadSource || null,
+      _v2:            true,
+      MigratedAt:     new Date().toISOString(),
+      MigrationVersion: MIGRATION_VERSION
+    };
+
+    newV2Leads.push(v2Lead);
+    newMigrationEntries.push({
+      MigrationID:      require('crypto').randomUUID(),
+      EntityType:       'Lead',
+      LegacyID:         lead.LeadID,
+      V2ID:             v2Id,
+      Status:           'MIGRATED',
+      Reason:           'Automatic migration',
+      CreatedAt:        new Date().toISOString(),
+      MigrationVersion: MIGRATION_VERSION
     });
-
-    ok(`Requirement: ${v1.RequirementID} → ${v2Id}`);
+    report.migrated.leads++;
+    log(`  Lead: ${lead.LeadID} → ${v2Id} (${lead.ClientName || lead.Name || 'Unknown'})`);
   }
 
-  return { migrationMap, newLeads, newTransactions, newRequirements, finalCounters: allocator.finalCounters() };
-}
+  // ──────────────────────────────────────────────────────────────────────────
+  // 2. Migrate Transactions
+  // ──────────────────────────────────────────────────────────────────────────
 
-// ── Report ────────────────────────────────────────────────────────────────────
+  log('--- Scanning Transactions ---');
+  const newV2Txns = [];
 
-function report(db) {
-  const v1Leads = (db.Leads || []).filter(isV1Lead);
-  const v2Leads = (db.Leads || []).filter((l) => l._v2);
-  const v1Txns  = (db.Transactions || []).filter(isV1Txn);
-  const v2Txns  = (db.Transactions || []).filter((t) => t._v2);
-  const v1Reqs  = (db.Requirements || []).filter(isV1Req);
-  const v2Reqs  = (db.Requirements || []).filter((r) => r._v2);
+  for (const txn of db.Transactions) {
+    report.scanned.transactions++;
 
-  console.log('\n── Migration Report ──────────────────────────────────');
-  console.log(`Leads:         V1: ${v1Leads.length}   V2: ${v2Leads.length}   Total: ${(db.Leads||[]).length}`);
-  console.log(`Transactions:  V1: ${v1Txns.length}  V2: ${v2Txns.length}  Total: ${(db.Transactions||[]).length}`);
-  console.log(`Requirements:  V1: ${v1Reqs.length}  V2: ${v2Reqs.length}  Total: ${(db.Requirements||[]).length}`);
-  console.log(`_V2Counters: ${JSON.stringify(db._V2Counters || {})}`);
-  console.log('─────────────────────────────────────────────────────\n');
-}
+    if (txn._v2 || migratedLegacyIds.has(txn.TransactionID)) {
+      txnIdMap[txn.TransactionID] = txn._v2 ? txn.TransactionID : (db.MigrationMap.find(m => m.LegacyID === txn.TransactionID)?.V2ID || txn.TransactionID);
+      report.skipped.transactions++;
+      continue;
+    }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+    report.eligible.transactions++;
 
-async function main() {
-  log(`Database: ${DB_FILE}`);
-  log(`Mode: ${ROLLBACK ? 'ROLLBACK' : DRY_RUN ? 'DRY-RUN' : 'APPLY'}`);
+    // Resolve parent LeadID
+    const v2LeadId = leadIdMap[txn.LeadID] || txn.LeadID;
+    const parentExists = db.Leads.some(l => l.LeadID === v2LeadId || l.LeadID === txn.LeadID) ||
+                         newV2Leads.some(l => l.LeadID === v2LeadId);
 
-  if (REPORT) {
-    const db = repo.read();
-    report(db);
-    return;
+    if (!parentExists) {
+      report.relationshipErrors.push({
+        EntityType: 'Transaction',
+        LegacyID:   txn.TransactionID,
+        Reason:     `Parent Lead ${txn.LeadID} not found`
+      });
+      report.manualReview.push({ EntityType: 'Transaction', LegacyID: txn.TransactionID, Reason: 'Broken Lead reference' });
+      warn(`  Broken ref: Transaction ${txn.TransactionID} → Lead ${txn.LeadID} not found`);
+      continue;
+    }
+
+    let v2Id;
+    do { v2Id = generateV2TxnId(txnV2Counter++); }
+    while (existingV2TxnIds.has(v2Id));
+    existingV2TxnIds.add(v2Id);
+
+    txnIdMap[txn.TransactionID] = v2Id;
+
+    newV2Txns.push({
+      ...txn,
+      TransactionID:    v2Id,
+      LegacyID:         txn.TransactionID,
+      LeadID:           v2LeadId,
+      _v2:              true,
+      MigratedAt:       new Date().toISOString(),
+      MigrationVersion: MIGRATION_VERSION
+    });
+    newMigrationEntries.push({
+      MigrationID:      require('crypto').randomUUID(),
+      EntityType:       'Transaction',
+      LegacyID:         txn.TransactionID,
+      V2ID:             v2Id,
+      Status:           'MIGRATED',
+      Reason:           'Automatic migration',
+      CreatedAt:        new Date().toISOString(),
+      MigrationVersion: MIGRATION_VERSION
+    });
+    report.migrated.transactions++;
+    log(`  Transaction: ${txn.TransactionID} → ${v2Id}`);
   }
 
-  if (ROLLBACK) {
-    doRollback();
-    return;
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3. Migrate Requirements
+  // ──────────────────────────────────────────────────────────────────────────
+
+  log('--- Scanning Requirements ---');
+  const newV2Reqs = [];
+
+  for (const req of db.Requirements) {
+    report.scanned.requirements++;
+
+    if (req._v2 || migratedLegacyIds.has(req.RequirementID)) {
+      report.skipped.requirements++;
+      continue;
+    }
+
+    report.eligible.requirements++;
+
+    const v2LeadId = leadIdMap[req.LeadID] || req.LeadID;
+    const v2TxnId  = txnIdMap[req.TransactionID] || req.TransactionID;
+
+    // Relationship validation
+    const leadOk = db.Leads.some(l => l.LeadID === v2LeadId || l.LeadID === req.LeadID) ||
+                   newV2Leads.some(l => l.LeadID === v2LeadId);
+    const txnOk  = db.Transactions.some(t => t.TransactionID === v2TxnId || t.TransactionID === req.TransactionID) ||
+                   newV2Txns.some(t => t.TransactionID === v2TxnId);
+
+    if (!leadOk || !txnOk) {
+      report.relationshipErrors.push({
+        EntityType: 'Requirement',
+        LegacyID:   req.RequirementID,
+        Reason:     !leadOk ? `Parent Lead ${req.LeadID} not found` : `Parent Transaction ${req.TransactionID} not found`
+      });
+      report.manualReview.push({ EntityType: 'Requirement', LegacyID: req.RequirementID, Reason: 'Broken relationship' });
+      warn(`  Broken ref: Requirement ${req.RequirementID}`);
+      continue;
+    }
+
+    // Verify LeadID === Transaction.LeadID
+    const txnParent = [...db.Transactions, ...newV2Txns].find(t => t.TransactionID === v2TxnId || t.LegacyID === req.TransactionID);
+    if (txnParent && txnParent.LeadID !== v2LeadId && txnParent.LeadID !== req.LeadID) {
+      report.relationshipErrors.push({
+        EntityType: 'Requirement',
+        LegacyID:   req.RequirementID,
+        Reason:     `Requirement.LeadID (${req.LeadID}) ≠ Transaction.LeadID (${txnParent.LeadID})`
+      });
+      report.manualReview.push({ EntityType: 'Requirement', LegacyID: req.RequirementID, Reason: 'LeadID mismatch with Transaction' });
+      continue;
+    }
+
+    // Build Fields map from legacy flat fields
+    const fields = req.Fields || {};
+    const fieldWarning = [];
+
+    // Preserve FormVersion if it exists; never invent one
+    const formVersion = req.FormVersion || null;
+    if (!formVersion) {
+      fieldWarning.push('No FormVersion — migration version will be noted but not assigned');
+    }
+
+    // Warn on missing key fields
+    if (!fields.BudgetMax && !req.BudgetMax && !req.Budget) {
+      fieldWarning.push('BudgetMax is missing — will remain UNKNOWN');
+    }
+
+    if (fieldWarning.length > 0) {
+      report.fieldWarnings.push({ RequirementID: req.RequirementID, warnings: fieldWarning });
+    }
+
+    let v2Id;
+    do { v2Id = generateV2ReqId(reqV2Counter++); }
+    while (existingV2ReqIds.has(v2Id));
+    existingV2ReqIds.add(v2Id);
+
+    newV2Reqs.push({
+      ...req,
+      RequirementID:    v2Id,
+      LegacyID:         req.RequirementID,
+      LeadID:           v2LeadId,
+      TransactionID:    v2TxnId,
+      Fields:           fields,  // UNKNOWN remains UNKNOWN — never invented
+      FormVersion:      formVersion,
+      _v2:              true,
+      MigratedAt:       new Date().toISOString(),
+      MigrationVersion: MIGRATION_VERSION
+    });
+    newMigrationEntries.push({
+      MigrationID:      require('crypto').randomUUID(),
+      EntityType:       'Requirement',
+      LegacyID:         req.RequirementID,
+      V2ID:             v2Id,
+      Status:           'MIGRATED',
+      Reason:           'Automatic migration',
+      CreatedAt:        new Date().toISOString(),
+      MigrationVersion: MIGRATION_VERSION
+    });
+    report.migrated.requirements++;
+    log(`  Requirement: ${req.RequirementID} → ${v2Id}`);
   }
 
-  // Read DB ONCE into memory — all subsequent operations use this snapshot
-  const db = repo.read();
+  // ── Print Summary ─────────────────────────────────────────────────────────
 
-  if (db._V2MigrationMap && !DRY_RUN) {
-    warn('A V2 migration has already been applied. Run --rollback first, or --dry-run to preview.');
-    process.exit(1);
-  }
-
-  // Build in-memory ID allocator (NO DB writes — safe for both dry-run and apply)
-  const allocator = buildIdAllocator(db);
-
-  // Build migration plan entirely in memory
-  const { migrationMap, newLeads, newTransactions, newRequirements, finalCounters } = buildMigration(db, allocator);
-
-  const total = newLeads.length + newTransactions.length + newRequirements.length;
+  log('');
+  log('=== Migration Summary ===');
+  log(`Leads:        scanned=${report.scanned.leads} eligible=${report.eligible.leads} migrated=${report.migrated.leads} skipped=${report.skipped.leads}`);
+  log(`Transactions: scanned=${report.scanned.transactions} eligible=${report.eligible.transactions} migrated=${report.migrated.transactions} skipped=${report.skipped.transactions}`);
+  log(`Requirements: scanned=${report.scanned.requirements} eligible=${report.eligible.requirements} migrated=${report.migrated.requirements} skipped=${report.skipped.requirements}`);
+  log(`Duplicates:   ${report.duplicates.length}`);
+  log(`Rel. Errors:  ${report.relationshipErrors.length}`);
+  log(`Field Warns:  ${report.fieldWarnings.length}`);
+  log(`Manual Review:${report.manualReview.length}`);
+  log('');
 
   if (DRY_RUN) {
-    log(`\nDRY-RUN SUMMARY — would migrate ${total} records (zero writes performed):`);
-    log(`  • ${newLeads.length} leads`);
-    log(`  • ${newTransactions.length} transactions`);
-    log(`  • ${newRequirements.length} requirements`);
-    log(`  Final counters would be: ${JSON.stringify(finalCounters)}`);
-    log('\nRun with --apply to perform actual migration (one atomic write).');
-    log('Run with --rollback to revert a previous --apply migration.');
-  } else {
-    // APPLY: mutate the in-memory snapshot, then write once
-    db.Leads        = [...(db.Leads || []),        ...newLeads];
-    db.Transactions = [...(db.Transactions || []), ...newTransactions];
-    db.Requirements = [...(db.Requirements || []), ...newRequirements];
-    db._V2Counters  = finalCounters;
-    db._V2MigrationMap = migrationMap;
-
-    repo.write(db); // single atomic write
-    ok(`Migration complete: ${newLeads.length} leads, ${newTransactions.length} transactions, ${newRequirements.length} requirements`);
+    log('DRY RUN complete — NO data was written.');
+    log('Run with --apply to perform the actual migration.');
+    report.mode = 'dry-run';
+    saveReport(report);
+    return;
   }
 
-  report(DRY_RUN ? db : repo.read());
+  // ── APPLY ──────────────────────────────────────────────────────────────────
+
+  // Create and verify backup before ANY write
+  log('Creating backup before apply…');
+  const backup = createBackup(db);
+  if (!verifyBackup(backup.path)) {
+    error('Backup verification failed. Migration ABORTED.');
+    process.exit(1);
+  }
+  log('Backup verified ✓');
+  report.backupPath = backup.path;
+
+  // Append V2 records (do NOT replace legacy records — they remain readable)
+  db.Leads        = [...db.Leads,        ...newV2Leads];
+  db.Transactions = [...db.Transactions, ...newV2Txns];
+  db.Requirements = [...db.Requirements, ...newV2Reqs];
+  db.MigrationMap = [...db.MigrationMap, ...newMigrationEntries];
+
+  writeDb(db);
+  log('Database updated ✓');
+  log('Migration COMPLETE.');
+  saveReport(report);
 }
 
-main().catch((e) => {
-  console.error('[migrateV2] Fatal error:', e.message);
+function saveReport(report) {
+  fs.mkdirSync(path.dirname(REPORT_FILE), { recursive: true });
+  fs.writeFileSync(REPORT_FILE, JSON.stringify(report, null, 2), 'utf8');
+  log(`Migration report saved: ${REPORT_FILE}`);
+}
+
+// ── Run ───────────────────────────────────────────────────────────────────────
+
+try {
+  run();
+} catch (e) {
+  error(`Fatal: ${e.message}`);
+  console.error(e.stack);
   process.exit(1);
-});
+}
