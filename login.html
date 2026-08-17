@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — Signature Properties</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #101820; color: #f4f1ea; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #17211b; border-radius: 16px; padding: 40px; text-align: center; max-width: 360px; box-shadow: 0 20px 50px rgba(0,0,0,0.35); }
+    h1 { font-size: 1.4rem; margin-bottom: 8px; }
+    p { color: #b7c0b9; margin-bottom: 24px; }
+    #status { margin-top: 16px; font-size: 0.9rem; color: #e2a53a; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Signature Properties</h1>
+    <p>Sign in with your authorized Google account.</p>
+    <div id="google-signin-button"></div>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    async function handleCredentialResponse(response) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = 'Verifying...';
+      try {
+        const result = await fetch('/api/auth/google', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: response.credential })
+        });
+        const payload = await result.json();
+        if (!result.ok || !payload.ok) {
+          statusEl.textContent = payload.error || 'Sign-in failed.';
+          return;
+        }
+        window.location.href = '/';
+      } catch (error) {
+        statusEl.textContent = 'Sign-in failed.';
+      }
+    }
+
+    (async function init() {
+      const statusEl = document.getElementById('status');
+      try {
+        const configResponse = await fetch('/api/auth/config');
+        const config = await configResponse.json();
+        const clientId = config && config.data && config.data.clientId;
+        if (!clientId) {
+          statusEl.textContent = 'Google sign-in is not configured yet.';
+          return;
+        }
+        window.google.accounts.id.initialize({ client_id: clientId, callback: handleCredentialResponse });
+        window.google.accounts.id.renderButton(document.getElementById('google-signin-button'), { theme: 'filled_black', size: 'large' });
+      } catch (error) {
+        statusEl.textContent = 'Unable to load sign-in.';
+      }
+    })();
+  </script>
+</body>
+</html>

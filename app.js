@@ -106,7 +106,7 @@ function renderModule(key) {
   const module = modules.find((m) => m.key === key) || modules[0];
   const title = pageMap[key] || renderDashboard;
   document.getElementById('page-title').textContent = module.label;
-  document.getElementById('page-kicker').textContent = 'Signature Properties OS / ' + module.label;
+  document.getElementById('page-kicker').textContent = 'SIGNATURE PROPERTIES / ' + module.label.toUpperCase();
 
   const navigationLinks = document.querySelectorAll('#app-navigation .nav-link');
   navigationLinks.forEach((link, idx) => {

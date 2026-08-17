@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test('Signature Properties OS real browser smoke and requirement action-row inspection', async ({ page }) => {
+test('Signature Properties real browser smoke and requirement action-row inspection', async ({ page }) => {
   await page.goto('http://localhost:4173', { waituntil: 'load', timeout: 10000 });
   await page.screenshot({ path: 'test/e2e/screenshots/home.png', fullPage: true });
 
@@ -8,7 +8,7 @@ test('Signature Properties OS real browser smoke and requirement action-row insp
   const bodyText = await page.locator('body').innerText();
   const bodyHtml = await page.locator('body').evaluate((element) => element.innerHTML);
 
-  await expect(title).toBe('Signature Properties OS');
+  await expect(title).toBe('Signature Properties');
   await expect(bodyText.length).toBeGreaterThan(1);
   await expect(bodyHtml.length).toBeGreaterThan(1);
 
