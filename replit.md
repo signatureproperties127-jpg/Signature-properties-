@@ -1,5 +1,7 @@
 # Signature Realty OS — Project Architecture
 
+> **⚠️ ARCHITECTURE REVISED (Aug 2026):** The form-centric V2 design below is superseded by the approved client-centric, progressive-capture V2 architecture. See **`docs/V2-BLUEPRINT.md`** — it is authoritative wherever the two conflict. Key changes: minimal client creation (no big forms), three-state fields (UNKNOWN/KNOWN/NOT_APPLICABLE — UNKNOWN never means NO), tiered completeness (Core/Important/Optional), "Needs" UX terminology, QuestionConfig/Next-Best-Question engine, and a mandatory phase-gate (stop + report + await approval after every phase).
+
 ## What this project is
 
 A **full-stack real-estate brokerage CRM** built in Node.js with a vanilla HTML/CSS/JS frontend. It manages the complete lead-to-deal lifecycle: leads → transactions → requirements → matching → site visits → negotiation → token → deal → commission → closing.

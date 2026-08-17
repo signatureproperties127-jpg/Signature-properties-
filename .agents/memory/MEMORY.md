@@ -1,2 +1,3 @@
+- [V2 Progressive Architecture](v2-progressive-architecture.md) — approved redesign: minimal creation, 3-state fields (UNKNOWN≠NO), phase-gate approval required; docs/V2-BLUEPRINT.md is authoritative
 - [Lead V2 Architecture](lead-v2-architecture.md) — V2 records in same DB collections with _v2:true marker + V2-format IDs; never separate collections
 - [V2 Body Caching Pattern](v2-body-caching.md) — readJson() in server.js caches body in req._parsedBody; V2Router pre-reads for POST/PATCH; legacy handlers must check cache
