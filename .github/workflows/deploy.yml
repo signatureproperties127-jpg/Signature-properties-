@@ -43,6 +43,10 @@ jobs:
           done
           systemctl is-active signature-realty
 
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:4173/api/dashboard && exit 0
+            sleep 1
+          done
           curl -f http://127.0.0.1:4173/api/dashboard
           EOF
 
