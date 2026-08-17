@@ -1,0 +1,74 @@
+name: Rotate VM Deploy Key
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare SSH credentials
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_SSH_PORT: ${{ secrets.VM_SSH_PORT }}
+          VM_SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          VM_NEW_DEPLOY_PRIVATE_KEY: ${{ secrets.VM_NEW_DEPLOY_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/old_deploy_key
+          printf '%s\n' "$VM_NEW_DEPLOY_PRIVATE_KEY" > ~/.ssh/new_deploy_key
+          chmod 600 ~/.ssh/old_deploy_key ~/.ssh/new_deploy_key
+          ssh-keyscan -p "$VM_SSH_PORT" -H "$VM_HOST" >> ~/.ssh/known_hosts
+
+      - name: Install replacement public key
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_SSH_PORT: ${{ secrets.VM_SSH_PORT }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_NEW_DEPLOY_PUBLIC_KEY: ${{ secrets.VM_NEW_DEPLOY_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$VM_NEW_DEPLOY_PUBLIC_KEY" | ssh -i ~/.ssh/old_deploy_key -p "$VM_SSH_PORT" \
+            "$VM_USER@$VM_HOST" '
+              set -euo pipefail
+              IFS= read -r new_key
+              install -d -m 700 "$HOME/.ssh"
+              touch "$HOME/.ssh/authorized_keys"
+              chmod 600 "$HOME/.ssh/authorized_keys"
+              grep -qxF "$new_key" "$HOME/.ssh/authorized_keys" || printf "%s\n" "$new_key" >> "$HOME/.ssh/authorized_keys"
+            '
+
+      - name: Verify replacement key authentication
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_SSH_PORT: ${{ secrets.VM_SSH_PORT }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/new_deploy_key -p "$VM_SSH_PORT" "$VM_USER@$VM_HOST" 'true'
+
+      - name: Remove exposed public key
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_SSH_PORT: ${{ secrets.VM_SSH_PORT }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+          set -euo pipefail
+          old_key=$(ssh-keygen -yf ~/.ssh/old_deploy_key | awk '{ print $1 " " $2 }')
+          printf '%s\n' "$old_key" | ssh -i ~/.ssh/new_deploy_key -p "$VM_SSH_PORT" "$VM_USER@$VM_HOST" '
+            set -euo pipefail
+            IFS= read -r old_key
+            authorized_keys="$HOME/.ssh/authorized_keys"
+            matches=$(awk -v key="$old_key" '$1 " " $2 == key { count++ } END { print count + 0 }' "$authorized_keys")
+            test "$matches" -eq 1
+            temporary_file=$(mktemp "$HOME/.ssh/authorized_keys.XXXXXX")
+            awk -v key="$old_key" '$1 " " $2 != key' "$authorized_keys" > "$temporary_file"
+            chmod 600 "$temporary_file"
+            mv "$temporary_file" "$authorized_keys"
+          '
+
+      - name: Clean up SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/old_deploy_key ~/.ssh/new_deploy_key
