@@ -3,22 +3,25 @@
 }
 
 :root {
-  --bg: #07151e;
-  --bg-soft: #101d26;
-  --bg-soft-2: #142933;
+  --brand-brown: #6B3F1F;
+  --brand-gold: #D9A441;
+  --brand-green: #2E7D32;
+  --bg: var(--brand-brown);
+  --bg-soft: #5A3419;
+  --bg-soft-2: #4A2B14;
   --panel: #ffffff;
   --panel-alt: #eef5f1;
   --text: #102a2e;
   --text-soft: #58767a;
   --text-muted: #758a8d;
-  --text-weak: #b3c0bd;
-  --navy: #0d1e2a;
-  --navy-2: #132d38;
-  --navy-3: #213f47;
-  --gold: #b87921;
-  --gold-bright: #d09d4f;
-  --green: #1e8b67;
-  --green-soft: #dff8dd;
+  --text-weak: #d9c3ae;
+  --navy: #5A3419;
+  --navy-2: #4A2B14;
+  --navy-3: #8B5A35;
+  --gold: var(--brand-gold);
+  --gold-bright: #e6bc6b;
+  --green: var(--brand-green);
+  --green-soft: #e3f2e4;
   --red: #b94a42;
   --red-soft: #ffeceb;
   --amber: #bd8d2d;
@@ -121,7 +124,7 @@ body {
 }
 
 .nav-link:hover {
-  background: #1b3137;
+  background: var(--navy-3);
 }
 
 .sidebar-footer {
@@ -137,7 +140,7 @@ body {
   gap: 10px;
   padding: 12px;
   border-radius: 12px;
-  background: #18363b;
+  background: var(--bg-soft);
 }
 
 .avatar {

@@ -367,7 +367,7 @@ async function handleApi(req, res, url) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Signature Realty | Public Portfolio</title>
+  <title>Signature Properties | Public Portfolio</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #17212f; }
     .wrap { max-width: 1200px; margin: 0 auto; padding: 40px 20px 80px; }
@@ -389,7 +389,7 @@ async function handleApi(req, res, url) {
   <div class="wrap">
     <div class="topbar">
       <div>
-        <div class="brand">Signature Realty</div>
+        <div class="brand">Signature Properties</div>
         <div class="subtitle">Public portfolio</div>
       </div>
     </div>
@@ -1528,13 +1528,13 @@ function escapeHtml(value) {
 
 function sendHtml(res, body, statusCode = 200) {
   res.writeHead(statusCode, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Signature Realty Broker Network</title><style>body{margin:0;background:#f4f1ea;color:#17211b;font:16px Georgia,serif}main{max-width:720px;margin:0 auto;padding:32px 20px}.eyebrow{letter-spacing:.12em;text-transform:uppercase;font:12px Arial,sans-serif;color:#6d746e}.panel{background:#fffdf8;border:1px solid #d8d0c2;padding:24px;box-shadow:0 10px 30px #24352812}h1{font-size:clamp(28px,7vw,48px);line-height:1.05;margin:12px 0 24px}dl{display:grid;grid-template-columns:1fr 1fr;gap:14px;border-top:1px solid #e7e0d4;padding-top:18px}dt{font:11px Arial,sans-serif;text-transform:uppercase;color:#777}dd{margin:4px 0 0;font-size:19px}.privacy{background:#edf2e9;padding:12px;font:14px Arial,sans-serif;margin:22px 0}label{display:block;font:12px Arial,sans-serif;text-transform:uppercase;color:#555;margin-top:18px}input,button{box-sizing:border-box;width:100%;min-height:48px;margin-top:7px;padding:12px;border:1px solid #bcb5a8;font:16px Arial,sans-serif}button{background:#1f4d36;color:white;border-color:#1f4d36;cursor:pointer}#result{font:14px Arial,sans-serif;margin-top:14px}@media(max-width:480px){main{padding:20px 14px}.panel{padding:18px}dl{grid-template-columns:1fr}}</style></head><body>${body}</body></html>`);
+  res.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Signature Properties Broker Network</title><style>body{margin:0;background:#f4f1ea;color:#17211b;font:16px Georgia,serif}main{max-width:720px;margin:0 auto;padding:32px 20px}.eyebrow{letter-spacing:.12em;text-transform:uppercase;font:12px Arial,sans-serif;color:#6d746e}.panel{background:#fffdf8;border:1px solid #d8d0c2;padding:24px;box-shadow:0 10px 30px #24352812}h1{font-size:clamp(28px,7vw,48px);line-height:1.05;margin:12px 0 24px}dl{display:grid;grid-template-columns:1fr 1fr;gap:14px;border-top:1px solid #e7e0d4;padding-top:18px}dt{font:11px Arial,sans-serif;text-transform:uppercase;color:#777}dd{margin:4px 0 0;font-size:19px}.privacy{background:#edf2e9;padding:12px;font:14px Arial,sans-serif;margin:22px 0}label{display:block;font:12px Arial,sans-serif;text-transform:uppercase;color:#555;margin-top:18px}input,button{box-sizing:border-box;width:100%;min-height:48px;margin-top:7px;padding:12px;border:1px solid #bcb5a8;font:16px Arial,sans-serif}button{background:#1f4d36;color:white;border-color:#1f4d36;cursor:pointer}#result{font:14px Arial,sans-serif;margin-top:14px}@media(max-width:480px){main{padding:20px 14px}.panel{padding:18px}dl{grid-template-columns:1fr}}</style></head><body>${body}</body></html>`);
 }
 
 function sendBrokerNetworkPage(res, token, payload) {
   const requirement = payload.requirement || {};
   const locations = (requirement.Locations || []).map(escapeHtml).join(' / ') || 'Flexible';
-  const body = `<main><div class="eyebrow">Signature Realty / Broker Network</div><section class="panel"><h1>Shared property requirement</h1><div class="privacy">Client identity remains hidden. Share only suitable inventory for this requirement.</div><dl><div><dt>Transaction</dt><dd>${escapeHtml(requirement.TransactionType || 'Property')}</dd></div><div><dt>Category</dt><dd>${escapeHtml(requirement.Category || 'Any')}</dd></div><div><dt>Budget</dt><dd>${escapeHtml(requirement.BudgetMin || '-')} - ${escapeHtml(requirement.BudgetMax || '-')}</dd></div><div><dt>Location</dt><dd>${locations}</dd></div><div><dt>BHK</dt><dd>${escapeHtml(requirement.BHKMin || '-')} - ${escapeHtml(requirement.BHKMax || '-')}</dd></div><div><dt>Possession</dt><dd>${escapeHtml(requirement.Possession || 'Any')}</dd></div></dl><label for="propertyId">Attach matching property</label><input id="propertyId" placeholder="Property ID"><button id="attach">Attach Property</button><div id="result" role="status"></div></section><script>document.getElementById('attach').addEventListener('click',async()=>{const result=document.getElementById('result');const propertyId=document.getElementById('propertyId').value.trim();if(!propertyId){result.textContent='Enter a property ID.';return}const response=await fetch('/api/broker-network/public/${encodeURIComponent(token)}/properties',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({propertyId})});const data=await response.json();result.textContent=data.ok?'Property submitted.':(data.error||'Unable to submit property.');});</script></main>`;
+  const body = `<main><div class="eyebrow">Signature Properties / Broker Network</div><section class="panel"><h1>Shared property requirement</h1><div class="privacy">Client identity remains hidden. Share only suitable inventory for this requirement.</div><dl><div><dt>Transaction</dt><dd>${escapeHtml(requirement.TransactionType || 'Property')}</dd></div><div><dt>Category</dt><dd>${escapeHtml(requirement.Category || 'Any')}</dd></div><div><dt>Budget</dt><dd>${escapeHtml(requirement.BudgetMin || '-')} - ${escapeHtml(requirement.BudgetMax || '-')}</dd></div><div><dt>Location</dt><dd>${locations}</dd></div><div><dt>BHK</dt><dd>${escapeHtml(requirement.BHKMin || '-')} - ${escapeHtml(requirement.BHKMax || '-')}</dd></div><div><dt>Possession</dt><dd>${escapeHtml(requirement.Possession || 'Any')}</dd></div></dl><label for="propertyId">Attach matching property</label><input id="propertyId" placeholder="Property ID"><button id="attach">Attach Property</button><div id="result" role="status"></div></section><script>document.getElementById('attach').addEventListener('click',async()=>{const result=document.getElementById('result');const propertyId=document.getElementById('propertyId').value.trim();if(!propertyId){result.textContent='Enter a property ID.';return}const response=await fetch('/api/broker-network/public/${encodeURIComponent(token)}/properties',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({propertyId})});const data=await response.json();result.textContent=data.ok?'Property submitted.':(data.error||'Unable to submit property.');});</script></main>`;
   sendHtml(res, body);
 }
 
@@ -1572,7 +1572,7 @@ appServer = http.createServer(async (req, res) => {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Signature Realty | Public Portfolio</title>
+  <title>Signature Properties | Public Portfolio</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #17212f; }
     .wrap { max-width: 1200px; margin: 0 auto; padding: 40px 20px 80px; }
@@ -1594,7 +1594,7 @@ appServer = http.createServer(async (req, res) => {
   <div class="wrap">
     <div class="topbar">
       <div>
-        <div class="brand">Signature Realty</div>
+        <div class="brand">Signature Properties</div>
         <div class="subtitle">Public portfolio</div>
       </div>
     </div>

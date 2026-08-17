@@ -48,7 +48,7 @@ test('Page opens and requirements action-row/share matrix is visible in browser 
   await page.screenshot({ path: 'test/e2e/screenshots/home.png', fullPage: true });
 
   const title = await page.title();
-  await expect(title).toBe('Signature Realty OS');
+  await expect(title).toBe('Signature Properties OS');
 
   await page.locator('#app-navigation .nav-link').nth(3).click();
   await page.locator('#app-content').waitFor({ state: 'attached', timeout: 3000 });
