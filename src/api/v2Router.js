@@ -35,7 +35,8 @@
 const { V2LeadService }        = require('../services/v2LeadService');
 const { V2TransactionService } = require('../services/v2TransactionService');
 const { V2RequirementService } = require('../services/v2RequirementService');
-const { EntityConfig, TagConfig, WorkflowConfig, ColumnConfig, V2FormRegistry, SourceOptions } = require('../data/v2Config');
+const { V2ConfigService }      = require('../services/v2ConfigService');
+const { EntityConfig, TagConfig, WorkflowConfig, ScoringConfig, ColumnConfig, V2FormRegistry, SourceOptions } = require('../data/v2Config');
 
 // ── Feature Flag ──────────────────────────────────────────────────────────────
 // Read once at startup. Restart server to pick up a change.
@@ -46,10 +47,14 @@ function isV2Enabled() {
 
 class V2Router {
   constructor(repository) {
-    this.leadSvc = new V2LeadService(repository);
-    this.txnSvc  = new V2TransactionService(repository);
-    this.reqSvc  = new V2RequirementService(repository);
-    this.repo    = repository;
+    this.leadSvc   = new V2LeadService(repository);
+    this.txnSvc    = new V2TransactionService(repository);
+    this.reqSvc    = new V2RequirementService(repository);
+    this.configSvc = new V2ConfigService(repository);
+    this.repo      = repository;
+
+    // Phase 8: seed FieldConfig and QuestionConfig on startup (idempotent)
+    this.configSvc.seedConfigIfEmpty();
   }
 
   /**
@@ -151,6 +156,45 @@ class V2Router {
     }
 
     // ── NEW: V2 namespace routes (always active) ──────────────────────────────
+
+    // ── Phase 8: Config sub-routes (must come BEFORE the /api/v2/config catch-all) ─
+
+    if (pathname === '/api/v2/config/fields' && method === 'GET') {
+      const filters = {};
+      const txn = url.searchParams.get('transactionType') || url.searchParams.get('txnType');
+      const cat = url.searchParams.get('category');
+      const sub = url.searchParams.get('subCategory') || url.searchParams.get('subcategory');
+      const tier = url.searchParams.get('tier');
+      if (txn) filters.transactionType = txn;
+      if (cat) filters.category = cat;
+      if (sub) filters.subCategory = sub;
+      if (tier) filters.tier = tier;
+      const rows = this.configSvc.getFieldConfig(filters);
+      return this._ok({ ok: true, data: rows, count: rows.length });
+    }
+
+    if (pathname === '/api/v2/config/questions' && method === 'GET') {
+      const filters = {};
+      const txn = url.searchParams.get('transactionType') || url.searchParams.get('txnType');
+      const cat = url.searchParams.get('category');
+      const sub = url.searchParams.get('subCategory') || url.searchParams.get('subcategory');
+      const priority = url.searchParams.get('priority');
+      if (txn) filters.transactionType = txn;
+      if (cat) filters.category = cat;
+      if (sub) filters.subCategory = sub;
+      if (priority) filters.priority = priority;
+      const rows = this.configSvc.getQuestionConfig(filters);
+      return this._ok({ ok: true, data: rows, count: rows.length });
+    }
+
+    if (pathname === '/api/v2/config/scoring' && method === 'GET') {
+      return this._ok({ ok: true, data: ScoringConfig });
+    }
+
+    if (pathname === '/api/v2/config/workflows' && method === 'GET') {
+      return this._ok({ ok: true, data: WorkflowConfig });
+    }
+
     if (pathname === '/api/v2/requirements/global' && method === 'GET') {
       const filters = {
         RequirementStatus: url.searchParams.get('status') || undefined,
