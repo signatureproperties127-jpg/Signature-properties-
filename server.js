@@ -2,10 +2,13 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { SignatureRealtyRuntime } = require('./src/runtime/app');
+const { V2Router } = require('./src/api/v2Router');
 
 const PORT = process.env.PORT || 4173;
 const ROOT = __dirname;
 const runtime = new SignatureRealtyRuntime();
+// V2 Router shares the same repository instance as the runtime
+const v2Router = new V2Router(runtime.repository);
 const activeSockets = new Set();
 let appServer;
 let shutdownInProgress = false;
@@ -92,10 +95,33 @@ function tenantCheck(record = {}, actor = {}) {
   return { ok: true };
 }
 
+// ── readJson helper (may be called before V2 dispatch) ──────────────────────
+async function readJsonOnce(req) {
+  if (req._parsedBody !== undefined) return req._parsedBody;
+  const body = await readJson(req);
+  req._parsedBody = body;
+  return body;
+}
+
 async function handleApi(req, res, url) {
   const pathname = url.pathname;
 
   try {
+    // ── V2 Router — handled FIRST for V2-specific and enhanced routes ────────
+    // Routes that need a body: pre-read once so V2 and legacy handlers share it
+    const needsBody = ['POST', 'PATCH', 'PUT'].includes(req.method);
+    let bodyForV2   = null;
+    if (needsBody) {
+      try { bodyForV2 = await readJsonOnce(req); } catch(_) { bodyForV2 = {}; }
+    }
+
+    const v2Result = await v2Router.handle(req, res, url, bodyForV2);
+    if (v2Result && v2Result.handled) {
+      sendJson(res, v2Result.body, v2Result.statusCode || 200);
+      return;
+    }
+    // ── End V2 Router ─────────────────────────────────────────────────────────
+
       if (pathname === '/api/public/properties' && req.method === 'GET') {
       const payload = await runtime.listPublicProperties();
       sendJson(res, payload);
@@ -1492,6 +1518,8 @@ async function handleApi(req, res, url) {
 }
 
 async function readJson(req) {
+  // If body was already parsed by the V2Router pre-read, return the cache.
+  if (req._parsedBody !== undefined) return req._parsedBody;
   return new Promise((resolve, reject) => {
     let body = '';
 
@@ -1501,12 +1529,15 @@ async function readJson(req) {
 
     req.on('end', () => {
       if (!body) {
+        req._parsedBody = {};
         resolve({});
         return;
       }
 
       try {
-        resolve(JSON.parse(body));
+        const parsed = JSON.parse(body);
+        req._parsedBody = parsed;
+        resolve(parsed);
       } catch (error) {
         reject(error);
       }
@@ -1625,7 +1656,15 @@ appServer = http.createServer(async (req, res) => {
     return;
   }
 
-  let filePath = url.pathname === '/' ? '/index.html' : url.pathname;
+  // ── V2 page routing — extensionless URLs → .html files ─────────────────────
+  const V2_ROUTES = {
+    '/clients':             '/clients.html',
+    '/client-workspace':    '/client-workspace.html',
+    '/requirements-view':   '/requirements-view.html'
+  };
+
+  let filePath = url.pathname === '/' ? '/index.html'
+    : (V2_ROUTES[url.pathname] || url.pathname);
 
   filePath = path.normalize(filePath).replace(/^\.\.[\/\\]/, '');
   const resolvedPath = path.resolve(ROOT, `.${filePath}`);

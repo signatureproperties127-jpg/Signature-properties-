@@ -76,7 +76,9 @@ class JsonRepository {
         Backups: [],
         ConfigurationHistory: [],
         FormConfig: [],
-        FormRegistry: []
+        FormRegistry: [],
+        RequirementHistory: [],
+        _V2Counters: { Lead: 0, Transaction: 0, Requirement: 0 }
       };
 
       fs.writeFileSync(this.dbFile, JSON.stringify(initial, null, 2));

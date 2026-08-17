@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Workspace — Signature Realty</title>
+  <style>
+    :root {
+      --clr-primary: #1d4ed8; --clr-primary-soft: #eff6ff;
+      --clr-success: #16a34a; --clr-warning: #d97706; --clr-danger: #dc2626;
+      --clr-neutral: #6b7280; --clr-bg: #f1f5f9; --clr-card: #ffffff;
+      --clr-border: #e2e8f0; --clr-text: #0f172a; --clr-text-light: #64748b;
+      --radius: 10px; --shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--clr-bg); color: var(--clr-text); font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; min-height: 100vh; }
+
+    /* Nav */
+    .topnav { background: #1e293b; color: #fff; display: flex; align-items: center; padding: 0 24px; height: 52px; gap: 8px; }
+    .topnav a { color: #cbd5e1; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 14px; }
+    .topnav a:hover { background: rgba(255,255,255,.1); color: #fff; }
+    .topnav .brand { font-weight: 700; font-size: 16px; color: #fff; margin-right: 20px; }
+    .topnav .breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #94a3b8; }
+    .topnav .breadcrumb a { color: #94a3b8; }
+    .topnav-right { margin-left: auto; }
+
+    /* Layout */
+    .layout { display: flex; min-height: calc(100vh - 52px); }
+    .sidebar { width: 280px; flex-shrink: 0; background: #fff; border-right: 1px solid var(--clr-border); overflow-y: auto; }
+    .main { flex: 1; overflow-y: auto; }
+
+    /* Client header */
+    .client-header { background: linear-gradient(135deg,#1e293b 0%,#1d4ed8 100%); color: #fff; padding: 24px; }
+    .client-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .client-avatar { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex-shrink: 0; }
+    .client-name { font-size: 22px; font-weight: 700; }
+    .client-id { font-size: 12px; color: rgba(255,255,255,.6); margin-top: 2px; }
+    .client-meta { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+    .client-meta-item { display: flex; align-items: center; gap: 5px; font-size: 13px; color: rgba(255,255,255,.8); }
+    .client-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .action-btn { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.1); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all .15s; }
+    .action-btn:hover { background: rgba(255,255,255,.25); }
+    .action-btn.green { background: #16a34a; border-color: #16a34a; }
+    .action-btn.blue  { background: #1d4ed8; border-color: #1d4ed8; }
+
+    /* Status badges */
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 11.5px; font-weight: 600; }
+    .badge-new       { background: #bae6fd; color: #075985; }
+    .badge-verified  { background: #bbf7d0; color: #065f46; }
+    .badge-active    { background: #a7f3d0; color: #047857; }
+    .badge-inactive  { background: #f3f4f6; color: #6b7280; }
+    .badge-blacklisted { background: #fecaca; color: #991b1b; }
+    .badge-draft     { background: #f3f4f6; color: #374151; }
+    .badge-open      { background: #dbeafe; color: #1e40af; }
+    .badge-closed    { background: #dcfce7; color: #166534; }
+    .badge-paused    { background: #fef3c7; color: #92400e; }
+    .badge-lost      { background: #fee2e2; color: #991b1b; }
+    .badge-archived  { background: #f3f4f6; color: #6b7280; }
+
+    /* Tags */
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; margin: 2px; }
+
+    /* Score */
+    .score-ring { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; border: 3px solid; }
+    .score-ring.high { border-color: #16a34a; color: #16a34a; }
+    .score-ring.mid  { border-color: #d97706; color: #d97706; }
+    .score-ring.low  { border-color: #dc2626; color: #dc2626; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--clr-border); padding: 0 24px; background: #fff; overflow-x: auto; }
+    .tab { padding: 13px 16px; font-size: 14px; font-weight: 500; color: var(--clr-text-light); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: all .15s; }
+    .tab.active { color: var(--clr-primary); border-bottom-color: var(--clr-primary); font-weight: 600; }
+    .tab:hover:not(.active) { color: var(--clr-text); }
+
+    /* Tab panes */
+    .tab-content { padding: 24px; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Sidebar nav */
+    .sidebar-section { padding: 16px; border-bottom: 1px solid var(--clr-border); }
+    .sidebar-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--clr-text-light); margin-bottom: 10px; }
+    .sidebar-profile-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .sidebar-profile-label { font-size: 12px; color: var(--clr-text-light); }
+    .sidebar-profile-value { font-size: 13px; font-weight: 500; }
+
+    /* Transaction cards */
+    .txn-card { background: #fff; border: 1px solid var(--clr-border); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; }
+    .txn-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; cursor: pointer; background: #f8fafc; border-bottom: 1px solid var(--clr-border); }
+    .txn-card-header:hover { background: #f1f5f9; }
+    .txn-type-badge { padding: 3px 10px; border-radius: 14px; font-size: 12px; font-weight: 600; }
+    .type-purchase { background: #dbeafe; color: #1e40af; }
+    .type-sale { background: #d1fae5; color: #065f46; }
+    .type-rent { background: #fef3c7; color: #92400e; }
+    .type-rentout { background: #fce7f3; color: #9d174d; }
+    .type-lease { background: #ede9fe; color: #5b21b6; }
+    .txn-card-body { padding: 14px 16px; }
+
+    /* Requirement rows */
+    .req-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; background: #f8fafc; margin-bottom: 8px; border: 1px solid var(--clr-border); cursor: pointer; }
+    .req-row:hover { background: #eff6ff; border-color: #bfdbfe; }
+    .req-row-left { flex: 1; min-width: 0; }
+    .req-id { font-size: 11px; color: var(--clr-text-light); }
+    .req-summary { font-size: 13.5px; font-weight: 600; margin-top: 1px; }
+    .req-meta { font-size: 12px; color: var(--clr-text-light); margin-top: 2px; }
+    .req-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    /* Pipeline stage */
+    .stage-badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #f0fdf4; color: #166534; }
+    .stage-matching { background: #eff6ff; color: #1d4ed8; }
+    .stage-shortlisted { background: #f0fdf4; color: #166534; }
+    .stage-sitevisit { background: #fff7ed; color: #9a3412; }
+    .stage-negotiation { background: #fef3c7; color: #92400e; }
+    .stage-token { background: #fdf4ff; color: #701a75; }
+    .stage-deal { background: #d1fae5; color: #065f46; }
+
+    /* Cards */
+    .card { background: var(--clr-card); border: 1px solid var(--clr-border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow); }
+    .card-title { font-size: 13px; font-weight: 700; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; }
+
+    /* Activity feed */
+    .activity-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--clr-border); }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--clr-primary); flex-shrink: 0; margin-top: 5px; }
+    .activity-type { font-size: 12px; font-weight: 600; color: var(--clr-primary); }
+    .activity-note { font-size: 13px; margin-top: 2px; }
+    .activity-time { font-size: 11px; color: var(--clr-text-light); margin-top: 2px; }
+
+    /* Timeline */
+    .timeline-item { display: flex; gap: 12px; padding: 8px 0; position: relative; }
+    .timeline-line { position: absolute; left: 8px; top: 24px; bottom: -8px; width: 1px; background: var(--clr-border); }
+    .timeline-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--clr-primary-soft); border: 2px solid var(--clr-primary); flex-shrink: 0; }
+    .timeline-content { flex: 1; }
+    .timeline-title { font-size: 13px; font-weight: 600; }
+    .timeline-meta { font-size: 11.5px; color: var(--clr-text-light); margin-top: 2px; }
+
+    /* Buttons */
+    .btn { padding: 7px 16px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all .15s; }
+    .btn-primary { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-ghost { background: transparent; color: var(--clr-primary); border-color: var(--clr-primary); }
+    .btn-ghost:hover { background: var(--clr-primary-soft); }
+    .btn-danger { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200; display: flex; align-items: center; justify-content: center; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: #fff; border-radius: 12px; width: 560px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,.18); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--clr-border); }
+    .modal-title { font-size: 17px; font-weight: 700; }
+    .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--clr-text-light); }
+    .modal-body { padding: 20px 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--clr-border); display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Form */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group.full { grid-column: 1/-1; }
+    label { font-size: 12px; font-weight: 600; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .04em; }
+    input, select, textarea { border: 1px solid var(--clr-border); border-radius: 7px; padding: 8px 11px; font-size: 13.5px; outline: none; font-family: inherit; width: 100%; }
+    input:focus, select:focus, textarea:focus { border-color: var(--clr-primary); box-shadow: 0 0 0 3px rgba(29,78,216,.1); }
+    .form-error { color: #dc2626; font-size: 12px; margin-top: 4px; }
+
+    /* Loader */
+    .loader { text-align: center; padding: 48px; color: var(--clr-text-light); font-size: 14px; }
+    .error-state { text-align: center; padding: 48px; color: #dc2626; }
+
+    /* Inline edit */
+    .editable-field { display: flex; align-items: center; gap: 6px; }
+    .editable-field .edit-icon { opacity: 0; cursor: pointer; color: var(--clr-primary); transition: opacity .15s; }
+    .editable-field:hover .edit-icon { opacity: 1; }
+
+    /* Requirement detail panel */
+    .req-detail { background: #fff; border: 1px solid var(--clr-border); border-radius: 10px; padding: 20px; margin-top: 16px; }
+    .req-detail-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 12px; }
+    .req-detail-item { }
+    .req-detail-label { font-size: 11px; font-weight: 700; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .04em; }
+    .req-detail-value { font-size: 14px; font-weight: 500; margin-top: 2px; }
+
+    /* Empty */
+    .empty-msg { color: var(--clr-text-light); font-size: 13px; text-align: center; padding: 24px; }
+
+    /* Followup */
+    .followup-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--clr-border); }
+    .followup-item:last-child { border-bottom: none; }
+    .followup-due { font-size: 12px; font-weight: 700; color: var(--clr-primary); min-width: 80px; }
+    .followup-type { font-size: 11px; background: var(--clr-primary-soft); color: var(--clr-primary); padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+
+    @media (max-width: 768px) {
+      .layout { flex-direction: column; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--clr-border); }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="brand">Signature Realty</span>
+  <div class="breadcrumb">
+    <a href="/clients">Clients</a>
+    <span>›</span>
+    <span id="nav-client-name">Loading…</span>
+  </div>
+  <div class="topnav-right">
+    <a href="/clients" style="color:#94a3b8;font-size:13px;">← All Clients</a>
+  </div>
+</nav>
+
+<div id="workspace-loader" class="loader">Loading client workspace…</div>
+<div id="workspace-error" class="error-state" style="display:none"></div>
+
+<div id="workspace" style="display:none">
+  <!-- Client Header -->
+  <div class="client-header">
+    <div class="client-header-top">
+      <div style="display:flex;gap:14px;align-items:center;flex:1;min-width:0">
+        <div class="client-avatar" id="avatar-initials">—</div>
+        <div>
+          <div class="client-name" id="client-name">—</div>
+          <div class="client-id" id="client-id">—</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+            <span class="badge" id="client-status-badge">—</span>
+            <span style="font-size:12px;color:rgba(255,255,255,.6)" id="client-lifecycle">—</span>
+            <div id="client-score-badge"></div>
+          </div>
+        </div>
+      </div>
+      <div class="client-actions">
+        <a class="action-btn" id="btn-call" href="#" onclick="return callClient()">📞 Call</a>
+        <a class="action-btn green" id="btn-whatsapp" href="#" target="_blank">💬 WhatsApp</a>
+        <button class="action-btn" onclick="openEditModal()">✏️ Edit</button>
+        <button class="action-btn blue" onclick="openAddTxnModal()">＋ Add Transaction</button>
+      </div>
+    </div>
+    <div class="client-meta">
+      <div class="client-meta-item" id="meta-phone">📱 —</div>
+      <div class="client-meta-item" id="meta-email">✉️ —</div>
+      <div class="client-meta-item" id="meta-source">🏷️ —</div>
+      <div class="client-meta-item" id="meta-agent">👤 —</div>
+    </div>
+    <div style="margin-top:10px" id="client-tags"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="transactions">Transactions</div>
+    <div class="tab" data-tab="requirements">Requirements</div>
+    <div class="tab" data-tab="activities">Activities</div>
+    <div class="tab" data-tab="followups">Follow-ups</div>
+    <div class="tab" data-tab="timeline">Timeline</div>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="tab-content">
+
+    <!-- Overview -->
+    <div class="tab-pane active" id="tab-overview">
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
+        <div>
+          <div class="card">
+            <div class="card-title">Transactions & Requirements</div>
+            <div id="overview-txns">—</div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-title">Summary</div>
+            <div id="overview-summary">—</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Recent Activity</div>
+            <div id="overview-activity">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transactions -->
+    <div class="tab-pane" id="tab-transactions">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <button class="btn btn-primary" onclick="openAddTxnModal()">＋ Add Transaction</button>
+      </div>
+      <div id="transactions-list">—</div>
+    </div>
+
+    <!-- Requirements -->
+    <div class="tab-pane" id="tab-requirements">
+      <div id="requirements-list">—</div>
+    </div>
+
+    <!-- Activities -->
+    <div class="tab-pane" id="tab-activities">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <button class="btn btn-primary" onclick="openAddActivityModal()">＋ Log Activity</button>
+      </div>
+      <div id="activities-list">—</div>
+    </div>
+
+    <!-- Follow-ups -->
+    <div class="tab-pane" id="tab-followups">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <button class="btn btn-primary" onclick="openAddFollowupModal()">＋ Add Follow-up</button>
+      </div>
+      <div id="followups-list">—</div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="tab-pane" id="tab-timeline">
+      <div id="timeline-list">—</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Edit Client Modal -->
+<div class="modal-overlay hidden" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Edit Client</span><button class="modal-close" onclick="closeModal('edit-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label>Client Name</label><input id="edit-name" type="text" /></div>
+        <div class="form-group"><label>Primary Mobile</label><input id="edit-mobile" type="tel" /></div>
+        <div class="form-group"><label>Alternate Mobile</label><input id="edit-alt-mobile" type="tel" /></div>
+        <div class="form-group"><label>WhatsApp</label><input id="edit-whatsapp" type="tel" /></div>
+        <div class="form-group"><label>Email</label><input id="edit-email" type="email" /></div>
+        <div class="form-group"><label>City</label><input id="edit-city" type="text" /></div>
+        <div class="form-group"><label>Client Status</label>
+          <select id="edit-status">
+            <option>New</option><option>Verified</option><option>Active</option><option>Inactive</option><option>Blacklisted</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Lifecycle</label>
+          <select id="edit-lifecycle">
+            <option>Prospect</option><option>Client</option><option>Past Client</option><option>Inactive</option><option>Blacklisted</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Source</label><select id="edit-source"></select></div>
+        <div class="form-group full"><label>Notes</label><textarea id="edit-notes" rows="3"></textarea></div>
+      </div>
+      <div id="edit-error" class="form-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Transaction Modal -->
+<div class="modal-overlay hidden" id="txn-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add Transaction</span><button class="modal-close" onclick="closeModal('txn-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Transaction Type *</label>
+          <select id="txn-type">
+            <option>Purchase</option><option>Sale</option><option>Rent</option>
+            <option>Rent Out</option><option>Lease</option><option>Lease Out</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Status</label>
+          <select id="txn-status"><option>Open</option><option>Active</option></select>
+        </div>
+        <div class="form-group"><label>Pipeline Stage</label>
+          <select id="txn-stage">
+            <option>New</option><option>Matching</option><option>Shortlisted</option>
+            <option>Site Visit</option><option>Negotiation</option><option>Token</option><option>Deal</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>Notes</label><textarea id="txn-notes" rows="2"></textarea></div>
+      </div>
+      <div id="txn-error" class="form-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('txn-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTransaction()">Add Transaction</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Requirement Modal -->
+<div class="modal-overlay hidden" id="req-modal">
+  <div class="modal" style="width:620px">
+    <div class="modal-header"><span class="modal-title">Add Requirement</span><button class="modal-close" onclick="closeModal('req-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label>Transaction</label>
+          <select id="req-txn-id" onchange="loadFormConfig()"></select>
+        </div>
+        <div class="form-group"><label>Category *</label>
+          <select id="req-category" onchange="loadFormConfig()">
+            <option value="">Select…</option>
+            <option>Residential</option><option>Commercial</option><option>Land</option><option>Industrial</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Sub Category</label>
+          <select id="req-subcategory" onchange="loadFormConfig()">
+            <option value="">Select…</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Budget Min (₹)</label><input id="req-budget-min" type="number" placeholder="e.g. 5000000" /></div>
+        <div class="form-group"><label>Budget Max (₹)</label><input id="req-budget-max" type="number" placeholder="e.g. 10000000" /></div>
+        <div class="form-group"><label>Primary Location</label><input id="req-location1" type="text" /></div>
+        <div class="form-group"><label>Secondary Location</label><input id="req-location2" type="text" /></div>
+        <div class="form-group"><label>Urgency</label>
+          <select id="req-urgency"><option>High</option><option>Medium</option><option>Low</option><option>Immediate</option></select>
+        </div>
+        <div class="form-group"><label>Possession</label>
+          <select id="req-possession">
+            <option value="">Any</option>
+            <option>Ready to Move</option><option>0-6 Months</option><option>6-12 Months</option>
+            <option>1-2 Years</option><option>2-3 Years</option><option>3+ Years</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Requirement Status</label>
+          <select id="req-status">
+            <option>Draft</option><option>Active</option>
+          </select>
+        </div>
+      </div>
+      <!-- Dynamic form fields rendered here -->
+      <div id="dynamic-fields" style="margin-top:14px"></div>
+      <div id="req-error" class="form-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('req-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRequirement()">Add Requirement</button>
+    </div>
+  </div>
+</div>
+
+<!-- Activity Modal -->
+<div class="modal-overlay hidden" id="activity-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Log Activity</span><button class="modal-close" onclick="closeModal('activity-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Activity Type</label>
+          <select id="act-type">
+            <option>Call</option><option>WhatsApp</option><option>Note</option>
+            <option>Email</option><option>Meeting</option><option>Site Visit</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Transaction (optional)</label><select id="act-txn"></select></div>
+        <div class="form-group full"><label>Notes</label><textarea id="act-notes" rows="3" placeholder="What happened…"></textarea></div>
+      </div>
+      <div id="act-error" class="form-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('activity-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveActivity()">Log Activity</button>
+    </div>
+  </div>
+</div>
+
+<!-- Follow-up Modal -->
+<div class="modal-overlay hidden" id="followup-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add Follow-up</span><button class="modal-close" onclick="closeModal('followup-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Type</label>
+          <select id="fu-type"><option>Call</option><option>WhatsApp</option><option>Email</option><option>Meeting</option><option>Site Visit</option></select>
+        </div>
+        <div class="form-group"><label>Priority</label>
+          <select id="fu-priority"><option>High</option><option>Medium</option><option>Low</option></select>
+        </div>
+        <div class="form-group"><label>Due Date</label><input id="fu-date" type="date" /></div>
+        <div class="form-group"><label>Due Time</label><input id="fu-time" type="time" /></div>
+        <div class="form-group full"><label>Notes</label><textarea id="fu-notes" rows="2"></textarea></div>
+      </div>
+      <div id="fu-error" class="form-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('followup-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFollowup()">Add Follow-up</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const LEAD_ID = new URLSearchParams(location.search).get('id');
+  let workspace = null;
+  let currentTxnId = null;
+
+  const SUBCATS = {
+    Residential: ['Flat','Villa','Row House','Bungalow','Penthouse','Studio'],
+    Commercial:  ['Office','Shop','Showroom','Warehouse'],
+    Land:        ['Residential Plot','Commercial Plot','Agricultural Land'],
+    Industrial:  ['Factory','Warehouse']
+  };
+  const SOURCES = ['Walk-in','Phone Enquiry','Website','Social Media','Facebook Ads','Google Ads','Referral',
+    'Agent Referral','Builder Referral','Property Portal','99acres','MagicBricks','Housing.com',
+    'NoBroker','WhatsApp','SMS Campaign','Email Campaign','Exhibition','Manual','Other'];
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  async function init() {
+    if (!LEAD_ID) {
+      showError('No client ID provided');
+      return;
+    }
+    buildSourceSelects();
+    await loadWorkspace();
+    setupTabs();
+  }
+
+  async function loadWorkspace() {
+    try {
+      const res = await fetch(`/api/clients/${encodeURIComponent(LEAD_ID)}/workspace`).then(r => r.json());
+      if (!res.ok) { showError(res.error || 'Client not found'); return; }
+      workspace = res.data;
+      renderAll();
+      document.getElementById('workspace-loader').style.display = 'none';
+      document.getElementById('workspace').style.display = 'block';
+    } catch(e) {
+      showError('Failed to load workspace: ' + e.message);
+    }
+  }
+
+  function renderAll() {
+    const lead = workspace.lead;
+    document.title = `${lead.ClientName||'Client'} — Signature Realty`;
+    document.getElementById('nav-client-name').textContent = lead.ClientName || lead.LeadID;
+
+    // Header
+    const initials = (lead.ClientName||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    document.getElementById('avatar-initials').textContent = initials;
+    document.getElementById('client-name').textContent = lead.ClientName || '—';
+    document.getElementById('client-id').textContent = lead.LeadID;
+
+    const status = lead.ClientStatus || lead.LeadStatus || 'New';
+    const sb = document.getElementById('client-status-badge');
+    sb.textContent = status;
+    sb.className = `badge badge-${status.toLowerCase().replace(/\s/g,'')}`;
+
+    document.getElementById('client-lifecycle').textContent = lead.ClientLifecycle || '—';
+
+    const score = typeof lead.ClientScore === 'object' ? lead.ClientScore?.total : lead.ClientScore;
+    if (score != null) {
+      const cls = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
+      document.getElementById('client-score-badge').innerHTML =
+        `<div class="score-ring ${cls}" title="Client Score">${score}</div>`;
+    }
+
+    document.getElementById('meta-phone').innerHTML = `📱 ${esc(lead.PrimaryMobile||lead.Phone||'—')}`;
+    document.getElementById('meta-email').innerHTML = `✉️ ${esc(lead.Email||'—')}`;
+    document.getElementById('meta-source').innerHTML = `🏷️ ${esc(lead.Source||lead.LeadSource||'—')}`;
+    document.getElementById('meta-agent').innerHTML = `👤 ${esc(lead.AssignedAgentID||'—')}`;
+
+    // WhatsApp link
+    const phone = (lead.PrimaryMobile||lead.Phone||'').replace(/\D/g,'');
+    if (phone) document.getElementById('btn-whatsapp').href = `https://wa.me/${phone}`;
+
+    // Tags
+    const tags = (lead.Tags||[]).map(t => `<span class="tag" style="background:#e0e7ff;color:#3730a3">${esc(t)}</span>`).join(' ');
+    document.getElementById('client-tags').innerHTML = tags;
+
+    renderOverview();
+    renderTransactions();
+    renderRequirements();
+    renderActivities();
+    renderFollowups();
+    renderTimeline();
+  }
+
+  // ── Overview ────────────────────────────────────────────────────────────────
+  function renderOverview() {
+    const ws = workspace;
+    const txns = ws.transactions || [];
+    const reqs = ws.requirements || [];
+
+    // Transaction tree
+    let html = txns.length ? txns.map(txn => {
+      const txnReqs = reqs.filter(r => r.TransactionID === txn.TransactionID);
+      const typeCls = 'type-' + (txn.TransactionType||txn.Type||'').toLowerCase().replace(/\s/g,'');
+      return `<div style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="txn-type-badge ${typeCls}">${esc(txn.TransactionType||txn.Type)}</span>
+          <span style="font-size:12px;color:#94a3b8">${esc(txn.TransactionID)}</span>
+          <span class="badge badge-${(txn.TransactionStatus||txn.Status||'').toLowerCase()}">${esc(txn.TransactionStatus||txn.Status||'—')}</span>
+          <span style="font-size:11px;margin-left:auto;color:#94a3b8">${esc(txn.PipelineStage||'')}</span>
+        </div>
+        ${txnReqs.map(r => reqRow(r)).join('') || '<div class="empty-msg" style="padding:6px 0">No requirements</div>'}
+      </div>`;
+    }).join('') : '<div class="empty-msg">No transactions yet. <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="openAddTxnModal()">Add one</button></div>';
+
+    document.getElementById('overview-txns').innerHTML = html;
+
+    // Summary
+    const s = ws.summary || {};
+    document.getElementById('overview-summary').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${summaryItem('Transactions', txns.length)}
+        ${summaryItem('Requirements', reqs.length)}
+        ${summaryItem('Active Reqs', s.activeRequirements||0)}
+        ${summaryItem('Open Follow-ups', s.pendingFollowUps||0)}
+      </div>`;
+
+    // Recent activity
+    const acts = (ws.activities||[]).slice(0,3);
+    document.getElementById('overview-activity').innerHTML = acts.length
+      ? acts.map(a => `<div style="padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px">
+          <span style="font-weight:600;color:#1d4ed8">${esc(a.ActivityType||'Note')}</span> — ${esc((a.Notes||'').slice(0,60))}
+          <div style="font-size:11px;color:#94a3b8">${timeAgo(a.CreatedAt)}</div>
+        </div>`).join('')
+      : '<div class="empty-msg">No activities yet</div>';
+  }
+
+  function summaryItem(label, val) {
+    return `<div style="text-align:center;padding:10px;background:#f8fafc;border-radius:8px">
+      <div style="font-size:22px;font-weight:700;color:#1d4ed8">${val}</div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">${esc(label)}</div>
+    </div>`;
+  }
+
+  // ── Transactions ────────────────────────────────────────────────────────────
+  function renderTransactions() {
+    const txns = workspace.transactions || [];
+    const reqs = workspace.requirements || [];
+    const html = txns.length ? txns.map(txn => {
+      const txnReqs = reqs.filter(r => r.TransactionID === txn.TransactionID);
+      const typeCls = 'type-' + (txn.TransactionType||txn.Type||'').toLowerCase().replace(/\s/g,'');
+      return `<div class="txn-card">
+        <div class="txn-card-header" onclick="toggleTxn('${esc(txn.TransactionID)}')">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="txn-type-badge ${typeCls}">${esc(txn.TransactionType||txn.Type)}</span>
+            <span style="font-size:13px;font-weight:600">${esc(txn.TransactionID)}</span>
+            <span class="badge badge-${(txn.TransactionStatus||txn.Status||'').toLowerCase()}">${esc(txn.TransactionStatus||txn.Status||'—')}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="stage-badge">${esc(txn.PipelineStage||'New')}</span>
+            <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();openAddReqModal('${esc(txn.TransactionID)}')">＋ Req</button>
+            <span style="color:#94a3b8;font-size:16px" id="txn-arrow-${esc(txn.TransactionID)}">▾</span>
+          </div>
+        </div>
+        <div class="txn-card-body" id="txn-body-${esc(txn.TransactionID)}">
+          ${txnReqs.map(r => reqRow(r)).join('') || '<div class="empty-msg" style="padding:4px 0">No requirements in this transaction.</div>'}
+        </div>
+      </div>`;
+    }).join('') : '<div class="empty-msg">No transactions yet.</div>';
+    document.getElementById('transactions-list').innerHTML = html;
+  }
+
+  function toggleTxn(id) {
+    const body  = document.getElementById(`txn-body-${id}`);
+    const arrow = document.getElementById(`txn-arrow-${id}`);
+    if (body.style.display==='none') { body.style.display=''; arrow.textContent='▾'; }
+    else { body.style.display='none'; arrow.textContent='▸'; }
+  }
+
+  // ── Requirements ────────────────────────────────────────────────────────────
+  function renderRequirements() {
+    const reqs = workspace.requirements || [];
+    const html = reqs.length
+      ? reqs.map(r => reqCard(r)).join('')
+      : '<div class="empty-msg">No requirements yet.</div>';
+    document.getElementById('requirements-list').innerHTML = html;
+  }
+
+  function reqRow(r) {
+    const status = r.RequirementStatus || r.Status || '—';
+    const stage  = r.PipelineStage || '—';
+    const stageCls = 'stage-' + stage.toLowerCase().replace(/\s/g,'').replace(/visit/,'sitevisit');
+    const budget = formatBudget(r.BudgetMin, r.BudgetMax);
+    const loc    = r.Location1 || '—';
+    return `<div class="req-row" onclick="showReqDetail('${esc(r.RequirementID)}')">
+      <div class="req-row-left">
+        <div class="req-id">${esc(r.RequirementID)}</div>
+        <div class="req-summary">${esc(r.Category||'—')} ${r.SubCategory ? '· '+esc(r.SubCategory) : ''} ${r.BHKMin ? '· '+r.BHKMin+'BHK' : ''}</div>
+        <div class="req-meta">${esc(budget)} · ${esc(loc)}</div>
+      </div>
+      <div class="req-right">
+        <span class="badge badge-${status.toLowerCase()}">${esc(status)}</span>
+        <span class="stage-badge ${stageCls}">${esc(stage)}</span>
+        ${r.RequirementScore != null ? `<span style="font-size:12px;color:#64748b">⭐ ${typeof r.RequirementScore === 'object' ? r.RequirementScore?.total : r.RequirementScore}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function reqCard(r) {
+    const status = r.RequirementStatus || r.Status || '—';
+    const stage  = r.PipelineStage || '—';
+    const budget = formatBudget(r.BudgetMin, r.BudgetMax);
+    const score  = typeof r.RequirementScore === 'object' ? r.RequirementScore?.total : r.RequirementScore;
+    return `<div class="card" style="cursor:pointer" onclick="showReqDetail('${esc(r.RequirementID)}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <span style="font-size:12px;color:#94a3b8">${esc(r.RequirementID)}</span>
+          &nbsp;·&nbsp;
+          <span style="font-size:12px;color:#64748b">${esc(r.TransactionID)}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="badge badge-${status.toLowerCase()}">${esc(status)}</span>
+          <span class="stage-badge">${esc(stage)}</span>
+          ${score != null ? `<span style="font-size:12px;color:#64748b">⭐${score}</span>` : ''}
+        </div>
+      </div>
+      <div class="req-detail-grid">
+        ${detailItem('Type', r.TransactionType||'—')}
+        ${detailItem('Category', r.Category||'—')}
+        ${detailItem('Sub Category', r.SubCategory||'—')}
+        ${detailItem('Budget', budget||'—')}
+        ${detailItem('Location', r.Location1||'—')}
+        ${detailItem('BHK', r.BHKMin != null ? `${r.BHKMin}–${r.BHKMax||r.BHKMin} BHK` : '—')}
+        ${detailItem('Possession', r.Possession||'—')}
+        ${detailItem('Urgency', r.Urgency||'—')}
+        ${detailItem('Form Ver', r.FormVersion||'—')}
+      </div>
+    </div>`;
+  }
+
+  function detailItem(label, val) {
+    return `<div class="req-detail-item">
+      <div class="req-detail-label">${esc(label)}</div>
+      <div class="req-detail-value">${esc(val)}</div>
+    </div>`;
+  }
+
+  function showReqDetail(reqId) {
+    // Expand requirement inline or navigate — simplified for now
+    alert(`Requirement: ${reqId}\nFull detail view coming in a subsequent release.`);
+  }
+
+  // ── Activities ──────────────────────────────────────────────────────────────
+  function renderActivities() {
+    const acts = workspace.activities || [];
+    const html = acts.length
+      ? acts.map(a => `<div class="activity-item">
+          <div class="activity-dot"></div>
+          <div>
+            <div class="activity-type">${esc(a.ActivityType||'Note')}</div>
+            <div class="activity-note">${esc(a.Notes||'—')}</div>
+            <div class="activity-time">${timeAgo(a.CreatedAt)}</div>
+          </div>
+        </div>`).join('')
+      : '<div class="empty-msg">No activities logged yet.</div>';
+    document.getElementById('activities-list').innerHTML = `<div class="card">${html}</div>`;
+  }
+
+  // ── Follow-ups ───────────────────────────────────────────────────────────────
+  function renderFollowups() {
+    const fus = workspace.followUps || [];
+    const html = fus.length
+      ? fus.map(f => `<div class="followup-item">
+          <div class="followup-due">${f.Date||'—'}</div>
+          <span class="followup-type">${esc(f.Type||'Call')}</span>
+          <div style="flex:1;font-size:13px">${esc(f.Notes||'—')}</div>
+          <span class="badge" style="${f.Status==='Completed'?'background:#dcfce7;color:#166534':'background:#fef3c7;color:#92400e'}">${esc(f.Status||'Pending')}</span>
+        </div>`).join('')
+      : '<div class="empty-msg">No follow-ups scheduled.</div>';
+    document.getElementById('followups-list').innerHTML = `<div class="card">${html}</div>`;
+  }
+
+  // ── Timeline ─────────────────────────────────────────────────────────────────
+  function renderTimeline() {
+    const items = workspace.timeline || [];
+    const html = items.length
+      ? `<div class="card">${items.slice(0,50).map((t,i) => `<div class="timeline-item">
+          ${i < items.length-1 ? '<div class="timeline-line"></div>' : ''}
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">${esc(t.EventTitle||t.EventType||'Event')}</div>
+            <div class="timeline-meta">${timeAgo(t.EventDate)} · ${esc(t.EntityType||'')}</div>
+          </div>
+        </div>`).join('')}</div>`
+      : '<div class="empty-msg">No timeline events yet.</div>';
+    document.getElementById('timeline-list').innerHTML = html;
+  }
+
+  // ── Modals ───────────────────────────────────────────────────────────────────
+  function openEditModal() {
+    const lead = workspace.lead;
+    document.getElementById('edit-name').value        = lead.ClientName||'';
+    document.getElementById('edit-mobile').value      = lead.PrimaryMobile||lead.Phone||'';
+    document.getElementById('edit-alt-mobile').value  = lead.AlternateMobile||'';
+    document.getElementById('edit-whatsapp').value    = lead.WhatsApp||'';
+    document.getElementById('edit-email').value       = lead.Email||'';
+    document.getElementById('edit-city').value        = lead.City||'';
+    document.getElementById('edit-status').value      = lead.ClientStatus||lead.LeadStatus||'New';
+    document.getElementById('edit-lifecycle').value   = lead.ClientLifecycle||'Prospect';
+    document.getElementById('edit-source').value      = lead.Source||lead.LeadSource||'Manual';
+    document.getElementById('edit-notes').value       = lead.Notes||'';
+    document.getElementById('edit-error').textContent = '';
+    document.getElementById('edit-modal').classList.remove('hidden');
+  }
+
+  async function saveEdit() {
+    const payload = {
+      ClientName:    document.getElementById('edit-name').value.trim(),
+      PrimaryMobile: document.getElementById('edit-mobile').value.trim(),
+      AlternateMobile: document.getElementById('edit-alt-mobile').value.trim()||null,
+      WhatsApp:      document.getElementById('edit-whatsapp').value.trim()||null,
+      Email:         document.getElementById('edit-email').value.trim()||null,
+      City:          document.getElementById('edit-city').value.trim()||null,
+      ClientStatus:  document.getElementById('edit-status').value,
+      ClientLifecycle: document.getElementById('edit-lifecycle').value,
+      Source:        document.getElementById('edit-source').value,
+      Notes:         document.getElementById('edit-notes').value.trim()
+    };
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(LEAD_ID)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      }).then(r => r.json());
+      if (res.ok) { closeModal('edit-modal'); await loadWorkspace(); }
+      else document.getElementById('edit-error').textContent = res.error||'Failed to save';
+    } catch(e) { document.getElementById('edit-error').textContent = e.message; }
+  }
+
+  function openAddTxnModal() {
+    document.getElementById('txn-error').textContent = '';
+    document.getElementById('txn-modal').classList.remove('hidden');
+  }
+
+  async function saveTransaction() {
+    const payload = {
+      TransactionType:   document.getElementById('txn-type').value,
+      TransactionStatus: document.getElementById('txn-status').value,
+      PipelineStage:     document.getElementById('txn-stage').value,
+      Notes:             document.getElementById('txn-notes').value.trim()
+    };
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(LEAD_ID)}/transactions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      }).then(r => r.json());
+      if (res.ok) { closeModal('txn-modal'); await loadWorkspace(); renderAll(); }
+      else document.getElementById('txn-error').textContent = res.error||'Failed';
+    } catch(e) { document.getElementById('txn-error').textContent = e.message; }
+  }
+
+  function openAddReqModal(txnId) {
+    currentTxnId = txnId;
+    document.getElementById('req-error').textContent = '';
+    document.getElementById('dynamic-fields').innerHTML = '';
+    // populate transaction select
+    const txns = workspace.transactions || [];
+    const sel = document.getElementById('req-txn-id');
+    sel.innerHTML = txns.map(t => `<option value="${enc(t.TransactionID)}" ${t.TransactionID===txnId?'selected':''}>${esc(t.TransactionType||t.Type)} — ${esc(t.TransactionID)}</option>`).join('');
+    document.getElementById('req-modal').classList.remove('hidden');
+  }
+
+  async function loadFormConfig() {
+    const txnId = document.getElementById('req-txn-id').value;
+    const cat   = document.getElementById('req-category').value;
+    const sub   = document.getElementById('req-subcategory').value;
+    const txn   = (workspace.transactions||[]).find(t => t.TransactionID === txnId);
+    const txnType = txn ? (txn.TransactionType||txn.Type||'Purchase') : 'Purchase';
+
+    // Update subcategory options
+    const subs = SUBCATS[cat] || [];
+    document.getElementById('req-subcategory').innerHTML = `<option value="">Select…</option>` + subs.map(s => `<option ${s===sub?'selected':''}>${esc(s)}</option>`).join('');
+
+    if (!cat || !sub) { document.getElementById('dynamic-fields').innerHTML = ''; return; }
+
+    try {
+      const res = await fetch(`/api/v2/form-config?transactionType=${enc(txnType)}&category=${enc(cat)}&subCategory=${enc(sub)}`).then(r => r.json());
+      if (!res.ok || !res.data) return;
+      const config = res.data;
+      const skipKeys = new Set(['BudgetMin','budgetMin','BudgetMax','budgetMax','Location1','location1','Location2','location2','Location3','location3','AvoidLocations','avoidLocations','Possession','possession','Urgency','urgency','MoveInDate','moveInDate','Preferences','preferences']);
+      const fields = Object.values(config.fields||{}).filter(f => !skipKeys.has(f.fieldId) && f.active !== false).sort((a,b) => (a.displayOrder||99)-(b.displayOrder||99));
+      document.getElementById('dynamic-fields').innerHTML = fields.length ? `<div class="form-grid">${fields.map(f => renderDynField(f)).join('')}</div>` : '';
+    } catch(e) {}
+  }
+
+  function renderDynField(f) {
+    const id = `dyn-${f.fieldId}`;
+    let input = '';
+    if (f.fieldType === 'Select' && f.options) {
+      input = `<select id="${esc(id)}"><option value="">—</option>${f.options.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    } else if (f.fieldType === 'MultiSelect' && f.options) {
+      input = `<select id="${esc(id)}" multiple>${f.options.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    } else if (f.fieldType === 'Boolean') {
+      input = `<select id="${esc(id)}"><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select>`;
+    } else if (f.fieldType === 'Number' || f.fieldType === 'Area') {
+      input = `<input id="${esc(id)}" type="number" placeholder="${esc(f.fieldLabel)}" />`;
+    } else if (f.fieldType === 'Date') {
+      input = `<input id="${esc(id)}" type="date" />`;
+    } else {
+      input = `<input id="${esc(id)}" type="text" placeholder="${esc(f.fieldLabel)}" />`;
+    }
+    return `<div class="form-group ${f.fieldType==='Textarea'?'full':''}">
+      <label>${esc(f.fieldLabel)}${f.required?' *':''}</label>
+      ${input}
+    </div>`;
+  }
+
+  async function saveRequirement() {
+    const txnId = document.getElementById('req-txn-id').value;
+    if (!txnId) { document.getElementById('req-error').textContent = 'Select a transaction'; return; }
+    const cat = document.getElementById('req-category').value;
+    if (!cat) { document.getElementById('req-error').textContent = 'Category is required'; return; }
+
+    const txn = (workspace.transactions||[]).find(t => t.TransactionID === txnId);
+    const txnType = txn ? (txn.TransactionType||txn.Type||'Purchase') : 'Purchase';
+
+    const payload = {
+      LeadID:          LEAD_ID,
+      TransactionType: txnType,
+      Category:        cat,
+      SubCategory:     document.getElementById('req-subcategory').value||null,
+      BudgetMin:       numOrNull(document.getElementById('req-budget-min').value),
+      BudgetMax:       numOrNull(document.getElementById('req-budget-max').value),
+      Location1:       document.getElementById('req-location1').value.trim()||null,
+      Location2:       document.getElementById('req-location2').value.trim()||null,
+      Urgency:         document.getElementById('req-urgency').value,
+      Possession:      document.getElementById('req-possession').value||null,
+      RequirementStatus: document.getElementById('req-status').value
+    };
+
+    // Collect dynamic fields
+    document.querySelectorAll('[id^="dyn-"]').forEach(el => {
+      const key = el.id.replace('dyn-', '');
+      if (el.value && el.value !== '') payload[key] = el.type === 'number' ? Number(el.value) : el.value;
+    });
+
+    try {
+      const res = await fetch(`/api/transactions/${encodeURIComponent(txnId)}/requirements`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      }).then(r => r.json());
+      if (res.ok) { closeModal('req-modal'); await loadWorkspace(); renderAll(); }
+      else document.getElementById('req-error').textContent = res.error||'Failed to create requirement';
+    } catch(e) { document.getElementById('req-error').textContent = e.message; }
+  }
+
+  function openAddActivityModal() {
+    const txns = workspace.transactions || [];
+    document.getElementById('act-txn').innerHTML = `<option value="">None</option>` + txns.map(t => `<option value="${enc(t.TransactionID)}">${esc(t.TransactionType||t.Type)} — ${esc(t.TransactionID)}</option>`).join('');
+    document.getElementById('act-error').textContent = '';
+    document.getElementById('activity-modal').classList.remove('hidden');
+  }
+
+  async function saveActivity() {
+    const payload = {
+      activityType: document.getElementById('act-type').value,
+      TransactionID: document.getElementById('act-txn').value || null,
+      notes: document.getElementById('act-notes').value.trim()
+    };
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(LEAD_ID)}/activity`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      }).then(r => r.json());
+      if (res.ok) { closeModal('activity-modal'); await loadWorkspace(); renderAll(); }
+      else document.getElementById('act-error').textContent = res.error||'Failed';
+    } catch(e) { document.getElementById('act-error').textContent = e.message; }
+  }
+
+  function openAddFollowupModal() {
+    document.getElementById('fu-error').textContent = '';
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('fu-date').value = today;
+    document.getElementById('followup-modal').classList.remove('hidden');
+  }
+
+  async function saveFollowup() {
+    const payload = {
+      LeadID:    LEAD_ID,
+      Type:      document.getElementById('fu-type').value,
+      Priority:  document.getElementById('fu-priority').value,
+      Date:      document.getElementById('fu-date').value,
+      Time:      document.getElementById('fu-time').value||null,
+      Notes:     document.getElementById('fu-notes').value.trim(),
+      Status:    'Pending'
+    };
+    try {
+      const res = await fetch('/api/followups', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      }).then(r => r.json());
+      if (res.ok) { closeModal('followup-modal'); await loadWorkspace(); renderAll(); }
+      else document.getElementById('fu-error').textContent = res.error||'Failed';
+    } catch(e) { document.getElementById('fu-error').textContent = e.message; }
+  }
+
+  function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+  // ── Tabs ─────────────────────────────────────────────────────────────────────
+  function setupTabs() {
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        const pane = document.getElementById('tab-' + tab.dataset.tab);
+        if (pane) pane.classList.add('active');
+      });
+    });
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function callClient() { const p = (workspace?.lead?.PrimaryMobile||workspace?.lead?.Phone||'').replace(/\D/g,''); if(p) { window.location.href = `tel:${p}`; } return false; }
+  function formatBudget(mn,mx) { const fmt=n=>n==null?null:n>=1e7?`₹${(n/1e7).toFixed(1)}Cr`:n>=1e5?`₹${(n/1e5).toFixed(0)}L`:`₹${n.toLocaleString('en-IN')}`; const a=fmt(mn),b=fmt(mx); return [a,b].filter(Boolean).join(' – ')||'—'; }
+  function timeAgo(iso) { if(!iso) return '—'; const d=new Date(iso); const diff=Math.floor((Date.now()-d)/1000); if(diff<60) return 'just now'; if(diff<3600) return Math.floor(diff/60)+'m ago'; if(diff<86400) return Math.floor(diff/3600)+'h ago'; if(diff<604800) return Math.floor(diff/86400)+'d ago'; return d.toLocaleDateString('en-IN'); }
+  function numOrNull(v) { const n=Number(v); return (v!==''&&!isNaN(n))?n:null; }
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function enc(s) { return encodeURIComponent(s||''); }
+  function showError(msg) { document.getElementById('workspace-loader').style.display='none'; const e=document.getElementById('workspace-error'); e.innerHTML=`<b>Error:</b> ${esc(msg)}<br><a href="/clients">← Back to Clients</a>`; e.style.display='block'; }
+  function buildSourceSelects() { SOURCES.forEach(s => { ['edit-source'].forEach(id => { const sel=document.getElementById(id); if(sel){const o=document.createElement('option');o.textContent=s;sel.appendChild(o);} }); }); }
+
+  init();
+</script>
+</body>
+</html>

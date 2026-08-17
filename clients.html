@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Signature Realty — Clients</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    /* ── Client List V2 ── */
+    :root {
+      --clr-primary: #1d4ed8;
+      --clr-primary-soft: #eff6ff;
+      --clr-success: #16a34a;
+      --clr-warning: #d97706;
+      --clr-danger: #dc2626;
+      --clr-neutral: #6b7280;
+      --clr-bg: #f9fafb;
+      --clr-card: #ffffff;
+      --clr-border: #e5e7eb;
+      --clr-text: #111827;
+      --clr-text-light: #6b7280;
+      --radius: 10px;
+    }
+    body { background: var(--clr-bg); color: var(--clr-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; }
+
+    /* ── Top Nav ── */
+    .topnav { background: #1e293b; color: #fff; display: flex; align-items: center; padding: 0 24px; height: 52px; gap: 8px; }
+    .topnav a { color: #cbd5e1; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 14px; }
+    .topnav a.active, .topnav a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .topnav .brand { font-weight: 700; font-size: 16px; color: #fff; margin-right: 24px; }
+    .topnav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+    /* ── Page layout ── */
+    .page { display: flex; flex-direction: column; height: calc(100vh - 52px); overflow: hidden; }
+    .page-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .page-title { font-size: 22px; font-weight: 700; margin: 0; }
+    .content-area { flex: 1; overflow: auto; padding: 0 24px 24px; }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 0; flex-wrap: wrap; }
+    .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--clr-border); border-radius: 8px; padding: 7px 12px; min-width: 260px; }
+    .search-box input { border: none; outline: none; font-size: 14px; flex: 1; background: transparent; }
+    .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-chip { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--clr-border); background: #fff; font-size: 13px; cursor: pointer; white-space: nowrap; transition: all .15s; }
+    .filter-chip.active { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
+    .filter-chip:hover:not(.active) { background: var(--clr-primary-soft); }
+
+    /* ── Stats bar ── */
+    .stats-bar { display: flex; gap: 16px; padding: 0 0 14px; }
+    .stat { background: #fff; border: 1px solid var(--clr-border); border-radius: 8px; padding: 10px 16px; min-width: 100px; }
+    .stat-val { font-size: 22px; font-weight: 700; color: var(--clr-primary); }
+    .stat-lbl { font-size: 11px; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .05em; }
+
+    /* ── Table ── */
+    .table-wrap { background: #fff; border-radius: var(--radius); border: 1px solid var(--clr-border); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead th { background: #f8fafc; text-align: left; padding: 10px 14px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--clr-text-light); border-bottom: 1px solid var(--clr-border); white-space: nowrap; cursor: pointer; user-select: none; }
+    thead th:hover { background: #f1f5f9; }
+    tbody tr { border-bottom: 1px solid var(--clr-border); transition: background .1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    td { padding: 11px 14px; vertical-align: middle; }
+
+    /* ── Status badges ── */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+    .badge-new       { background: #e0f2fe; color: #0369a1; }
+    .badge-verified  { background: #dcfce7; color: #15803d; }
+    .badge-active    { background: #d1fae5; color: #047857; }
+    .badge-inactive  { background: #f3f4f6; color: #6b7280; }
+    .badge-blacklisted { background: #fee2e2; color: #991b1b; }
+
+    /* ── Tags ── */
+    .tag { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; margin: 1px 2px; }
+    .tag-investor  { background: #f3e8ff; color: #7c3aed; }
+    .tag-vip       { background: #fef9c3; color: #854d0e; }
+    .tag-hot       { background: #fee2e2; color: #b91c1c; }
+    .tag-referral  { background: #e0e7ff; color: #4338ca; }
+    .tag-nri       { background: #fae8ff; color: #86198f; }
+    .tag-buyer     { background: #dbeafe; color: #1d4ed8; }
+    .tag-seller    { background: #dcfce7; color: #15803d; }
+    .tag-corporate { background: #ccfbf1; color: #0f766e; }
+    .tag-default   { background: #f3f4f6; color: #4b5563; }
+
+    /* ── Score ── */
+    .score-pill { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 22px; border-radius: 11px; font-size: 12px; font-weight: 700; }
+    .score-high { background: #d1fae5; color: #065f46; }
+    .score-mid  { background: #fef3c7; color: #92400e; }
+    .score-low  { background: #fee2e2; color: #991b1b; }
+
+    /* ── Add Client Btn ── */
+    .btn-primary { background: var(--clr-primary); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .btn-primary:hover { background: #1e40af; }
+
+    /* ── Client link ── */
+    .client-link { font-weight: 600; color: var(--clr-primary); text-decoration: none; }
+    .client-link:hover { text-decoration: underline; }
+
+    /* ── Empty state ── */
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--clr-text-light); }
+    .empty-state svg { margin-bottom: 12px; opacity: .4; }
+
+    /* ── Pagination ── */
+    .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 14px 0; font-size: 13px; color: var(--clr-text-light); }
+    .page-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--clr-border); background: #fff; cursor: pointer; font-size: 13px; }
+    .page-btn.active { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
+
+    /* ── Loader ── */
+    .loader { text-align: center; padding: 48px; color: var(--clr-text-light); }
+
+    /* ── Modal ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; display: flex; align-items: center; justify-content: center; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: #fff; border-radius: 12px; width: 540px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
+    .modal-title { font-size: 17px; font-weight: 700; }
+    .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--clr-text-light); padding: 0 4px; }
+    .modal-body { padding: 20px 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--clr-border); display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1/-1; }
+    label { font-size: 12.5px; font-weight: 600; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .04em; }
+    input, select, textarea { border: 1px solid var(--clr-border); border-radius: 7px; padding: 8px 11px; font-size: 14px; outline: none; font-family: inherit; width: 100%; box-sizing: border-box; }
+    input:focus, select:focus, textarea:focus { border-color: var(--clr-primary); box-shadow: 0 0 0 3px rgba(29,78,216,.12); }
+    .form-error { color: var(--clr-danger); font-size: 12px; margin-top: 2px; }
+
+    /* ── Dup warning ── */
+    .dup-warning { background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+    .dup-warning-title { font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .dup-candidate { padding: 6px 0; border-bottom: 1px solid #fde68a; font-size: 13px; }
+    .dup-candidate:last-child { border-bottom: none; }
+
+    /* ── Tag picker ── */
+    .tag-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag-opt { padding: 4px 10px; border-radius: 14px; border: 1px solid var(--clr-border); background: #fff; font-size: 12px; cursor: pointer; transition: all .15s; }
+    .tag-opt.selected { border-color: var(--clr-primary); background: var(--clr-primary-soft); color: var(--clr-primary); }
+
+    @media (max-width: 768px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .stats-bar { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Top Nav -->
+<nav class="topnav">
+  <span class="brand">Signature Realty</span>
+  <a href="/">Dashboard</a>
+  <a href="/clients" class="active">Clients</a>
+  <a href="/requirements-view">Requirements</a>
+  <a href="/index.html">Leads (V1)</a>
+  <div class="topnav-right">
+    <a href="/login.html" style="color:#94a3b8;font-size:13px;">Logout</a>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <h1 class="page-title">Clients</h1>
+    <button class="btn-primary" onclick="openAddModal()">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Add Client
+    </button>
+  </div>
+
+  <div class="content-area">
+    <!-- Stats -->
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat"><div class="stat-val" id="stat-total">—</div><div class="stat-lbl">Total</div></div>
+      <div class="stat"><div class="stat-val" id="stat-active">—</div><div class="stat-lbl">Active</div></div>
+      <div class="stat"><div class="stat-val" id="stat-new">—</div><div class="stat-lbl">New</div></div>
+      <div class="stat"><div class="stat-val" id="stat-verified">—</div><div class="stat-lbl">Verified</div></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#94a3b8"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke-width="2"/></svg>
+        <input id="search-input" type="text" placeholder="Search clients…" oninput="debounceSearch()" />
+      </div>
+      <div class="filter-bar" id="filter-bar">
+        <button class="filter-chip active" data-filter="">All</button>
+        <button class="filter-chip" data-filter="New">New</button>
+        <button class="filter-chip" data-filter="Verified">Verified</button>
+        <button class="filter-chip" data-filter="Active">Active</button>
+        <button class="filter-chip" data-filter="Inactive">Inactive</button>
+        <button class="filter-chip" data-filter="tag:Hot">Hot</button>
+        <button class="filter-chip" data-filter="tag:Investor">Investor</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sort('ClientName')">Client ▾</th>
+            <th>Mobile</th>
+            <th onclick="sort('ClientStatus')">Status</th>
+            <th>Lifecycle</th>
+            <th>Tags</th>
+            <th onclick="sort('ClientScore')">Score</th>
+            <th>Requirements</th>
+            <th>Budget</th>
+            <th>Location</th>
+            <th>Agent</th>
+          </tr>
+        </thead>
+        <tbody id="clients-tbody">
+          <tr><td colspan="10" class="loader">Loading clients…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<!-- Add Client Modal -->
+<div class="modal-overlay hidden" id="add-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Client</span>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Dup warning -->
+      <div id="dup-warning" style="display:none" class="dup-warning">
+        <div class="dup-warning-title" id="dup-title">⚠️ Possible duplicate detected</div>
+        <div id="dup-candidates"></div>
+        <div style="margin-top:10px;font-size:13px;">
+          <label>
+            <input type="checkbox" id="confirm-dup" /> &nbsp;This is a new client — create anyway
+          </label>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Client Name *</label>
+          <input id="f-name" type="text" placeholder="Full name" />
+        </div>
+        <div class="form-group">
+          <label>Primary Mobile *</label>
+          <input id="f-mobile" type="tel" placeholder="+91 98765 43210" onblur="checkDuplicate()" />
+        </div>
+        <div class="form-group">
+          <label>Alternate Mobile</label>
+          <input id="f-alt-mobile" type="tel" placeholder="Alternate number" />
+        </div>
+        <div class="form-group">
+          <label>WhatsApp</label>
+          <input id="f-whatsapp" type="tel" placeholder="WhatsApp number" />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input id="f-email" type="email" placeholder="email@example.com" onblur="checkDuplicate()" />
+        </div>
+        <div class="form-group">
+          <label>City</label>
+          <input id="f-city" type="text" placeholder="City" />
+        </div>
+        <div class="form-group">
+          <label>Client Status</label>
+          <select id="f-status">
+            <option>New</option>
+            <option>Verified</option>
+            <option>Active</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Lifecycle</label>
+          <select id="f-lifecycle">
+            <option>Prospect</option>
+            <option>Client</option>
+            <option>Past Client</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Source</label>
+          <select id="f-source"></select>
+        </div>
+        <div class="form-group">
+          <label>Assigned Agent</label>
+          <input id="f-agent" type="text" placeholder="Agent ID" value="USR-0001" />
+        </div>
+        <div class="form-group full">
+          <label>Tags</label>
+          <div class="tag-picker" id="tag-picker"></div>
+        </div>
+        <div class="form-group full">
+          <label>Notes</label>
+          <textarea id="f-notes" rows="2" placeholder="Any notes about this client…"></textarea>
+        </div>
+      </div>
+      <div id="form-error" class="form-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" style="background:#6b7280;" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitClient()">Save Client</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const PAGE_SIZE = 25;
+  let allClients  = [];
+  let filtered    = [];
+  let currentPage = 1;
+  let sortKey     = 'UpdatedAt';
+  let sortDir     = -1;
+  let activeFilter = '';
+  let searchQ      = '';
+  let selectedTags = new Set();
+  let searchTimer  = null;
+
+  const TAGS = ['Investor','Buyer','Seller','Tenant','Landlord','Builder','NRI','Corporate','VIP','Hot','Referral'];
+  const SOURCES = ['Walk-in','Phone Enquiry','Website','Social Media','Facebook Ads','Google Ads','Referral',
+    'Agent Referral','Builder Referral','Property Portal','99acres','MagicBricks','Housing.com',
+    'NoBroker','WhatsApp','SMS Campaign','Email Campaign','Exhibition','Newspaper Ad','Manual','Other'];
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  async function init() {
+    buildTagPicker();
+    buildSourceSelect();
+    await loadClients();
+    setupFilterChips();
+  }
+
+  async function loadClients() {
+    try {
+      const [leadsRes, reqsRes] = await Promise.all([
+        fetch('/api/leads').then(r => r.json()),
+        fetch('/api/requirements').then(r => r.json())
+      ]);
+      const leads = leadsRes.data || [];
+      const reqs  = reqsRes.data || [];
+
+      // Enrich with requirement summary
+      allClients = leads.map(lead => {
+        const leadReqs = reqs.filter(r => r.LeadID === lead.LeadID);
+        const latest   = leadReqs.sort((a,b) => new Date(b.UpdatedAt||b.CreatedAt) - new Date(a.UpdatedAt||a.CreatedAt))[0];
+        return {
+          ...lead,
+          _reqs: leadReqs,
+          _latestReq: latest,
+          _reqCount: leadReqs.length
+        };
+      });
+
+      updateStats();
+      applyFilter();
+    } catch(e) {
+      document.getElementById('clients-tbody').innerHTML =
+        `<tr><td colspan="10" class="loader" style="color:#dc2626">Failed to load clients: ${e.message}</td></tr>`;
+    }
+  }
+
+  function updateStats() {
+    const s = allClients.reduce((acc, c) => {
+      acc.total++;
+      const st = c.ClientStatus || c.LeadStatus || '';
+      if (st === 'Active') acc.active++;
+      if (st === 'New') acc.new++;
+      if (st === 'Verified') acc.verified++;
+      return acc;
+    }, { total:0, active:0, new:0, verified:0 });
+    document.getElementById('stat-total').textContent    = s.total;
+    document.getElementById('stat-active').textContent   = s.active;
+    document.getElementById('stat-new').textContent      = s.new;
+    document.getElementById('stat-verified').textContent = s.verified;
+  }
+
+  function applyFilter() {
+    filtered = allClients.filter(c => {
+      const status = c.ClientStatus || c.LeadStatus || '';
+      if (activeFilter.startsWith('tag:')) {
+        const tag = activeFilter.slice(4);
+        if (!(c.Tags||[]).includes(tag)) return false;
+      } else if (activeFilter && status !== activeFilter) {
+        return false;
+      }
+      if (searchQ) {
+        const q = searchQ.toLowerCase();
+        const name  = (c.ClientName||'').toLowerCase();
+        const phone = ((c.PrimaryMobile||c.Phone||'')).replace(/\s/g,'');
+        const email = (c.Email||'').toLowerCase();
+        if (!name.includes(q) && !phone.includes(q.replace(/\s/g,'')) && !email.includes(q)) return false;
+      }
+      return true;
+    });
+    sortData();
+    currentPage = 1;
+    renderPage();
+  }
+
+  function sortData() {
+    filtered.sort((a,b) => {
+      let av = a[sortKey] || '', bv = b[sortKey] || '';
+      if (typeof av === 'object') av = av?.total || 0;
+      if (typeof bv === 'object') bv = bv?.total || 0;
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return  1 * sortDir;
+      return 0;
+    });
+  }
+
+  function sort(key) {
+    if (sortKey === key) sortDir *= -1;
+    else { sortKey = key; sortDir = -1; }
+    sortData();
+    renderPage();
+  }
+
+  function renderPage() {
+    const tbody = document.getElementById('clients-tbody');
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const page  = filtered.slice(start, start + PAGE_SIZE);
+
+    if (!page.length) {
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">No clients found.</div></td></tr>`;
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = page.map(c => {
+      const status    = c.ClientStatus || c.LeadStatus || 'New';
+      const lifecycle = c.ClientLifecycle || '—';
+      const phone     = c.PrimaryMobile || c.Phone || '—';
+      const tags      = (c.Tags||[]).map(t => tagBadge(t)).join('');
+      const score     = c.ClientScore;
+      const scoreVal  = typeof score === 'object' ? score?.total : score;
+      const scoreCls  = scoreVal >= 70 ? 'score-high' : scoreVal >= 40 ? 'score-mid' : 'score-low';
+      const latestReq = c._latestReq;
+      const budget    = latestReq ? formatBudget(latestReq.BudgetMin, latestReq.BudgetMax) : '—';
+      const location  = latestReq ? (latestReq.Location1||'—') : '—';
+      return `<tr>
+        <td><a class="client-link" href="/client-workspace.html?id=${enc(c.LeadID)}">${esc(c.ClientName||'—')}</a><br>
+          <span style="font-size:11px;color:#94a3b8">${esc(c.LeadID)}</span></td>
+        <td>${esc(phone)}</td>
+        <td><span class="badge badge-${status.toLowerCase()}">${esc(status)}</span></td>
+        <td style="font-size:12.5px;color:#64748b">${esc(lifecycle)}</td>
+        <td>${tags||'<span style="color:#d1d5db">—</span>'}</td>
+        <td>${scoreVal != null ? `<span class="score-pill ${scoreCls}">${scoreVal}</span>` : '—'}</td>
+        <td style="text-align:center">${c._reqCount || 0}</td>
+        <td style="font-size:12.5px;color:#64748b">${esc(budget)}</td>
+        <td style="font-size:12.5px;color:#64748b">${esc(location)}</td>
+        <td style="font-size:12px;color:#94a3b8">${esc(c.AssignedAgentID||'—')}</td>
+      </tr>`;
+    }).join('');
+
+    renderPagination();
+  }
+
+  function renderPagination() {
+    const total = Math.ceil(filtered.length / PAGE_SIZE);
+    const pag   = document.getElementById('pagination');
+    if (total <= 1) { pag.innerHTML=''; return; }
+    let html = `<span>${filtered.length} clients</span>`;
+    for (let i=1; i<=total; i++) {
+      html += `<button class="page-btn${i===currentPage?' active':''}" onclick="gotoPage(${i})">${i}</button>`;
+    }
+    pag.innerHTML = html;
+  }
+
+  function gotoPage(n) { currentPage=n; renderPage(); }
+
+  function debounceSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { searchQ = document.getElementById('search-input').value; applyFilter(); }, 250);
+  }
+
+  function setupFilterChips() {
+    document.querySelectorAll('.filter-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilter = btn.dataset.filter || '';
+        applyFilter();
+      });
+    });
+  }
+
+  // ── Duplicate check ─────────────────────────────────────────────────────────
+  async function checkDuplicate() {
+    const mobile = document.getElementById('f-mobile').value;
+    const email  = document.getElementById('f-email').value;
+    if (!mobile && !email) return;
+    try {
+      const res = await fetch('/api/leads/check-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ PrimaryMobile: mobile, Email: email, ClientName: document.getElementById('f-name').value })
+      }).then(r => r.json());
+
+      const warn = document.getElementById('dup-warning');
+      if (res.result === 'EXACT_MATCH') {
+        document.getElementById('dup-title').textContent = '🚫 Exact duplicate found — this client already exists';
+        document.getElementById('dup-candidates').innerHTML = renderCandidates(res.candidates);
+        document.getElementById('confirm-dup').parentElement.style.display='none';
+        warn.style.display='block';
+        warn.style.borderColor='#ef4444';
+        warn.style.background='#fef2f2';
+      } else if (res.result === 'POSSIBLE_MATCH') {
+        document.getElementById('dup-title').textContent = '⚠️ Possible duplicate detected';
+        document.getElementById('dup-candidates').innerHTML = renderCandidates(res.candidates);
+        document.getElementById('confirm-dup').parentElement.style.display='';
+        warn.style.display='block';
+        warn.style.borderColor='#f59e0b';
+        warn.style.background='#fffbeb';
+      } else {
+        warn.style.display='none';
+      }
+    } catch(e) {}
+  }
+
+  function renderCandidates(list) {
+    return (list||[]).map(c => `<div class="dup-candidate">
+      <strong>${esc(c.ClientName||'—')}</strong> &nbsp;•&nbsp; ${esc(c.MaskedMobile||'—')} &nbsp;•&nbsp; ${esc(c.MaskedEmail||'—')}
+      &nbsp;<a href="/client-workspace.html?id=${enc(c.LeadID)}" target="_blank" style="font-size:12px;color:#2563eb">View →</a>
+    </div>`).join('');
+  }
+
+  // ── Add Client Modal ─────────────────────────────────────────────────────────
+  function openAddModal() {
+    document.getElementById('add-modal').classList.remove('hidden');
+    document.getElementById('dup-warning').style.display='none';
+    document.getElementById('form-error').textContent='';
+    selectedTags.clear();
+    renderTagPicker();
+    ['f-name','f-mobile','f-alt-mobile','f-whatsapp','f-email','f-city','f-notes'].forEach(id => {
+      document.getElementById(id).value='';
+    });
+    document.getElementById('f-status').value='New';
+    document.getElementById('f-lifecycle').value='Prospect';
+  }
+
+  function closeModal() { document.getElementById('add-modal').classList.add('hidden'); }
+
+  async function submitClient() {
+    const name   = document.getElementById('f-name').value.trim();
+    const mobile = document.getElementById('f-mobile').value.trim();
+    if (!name) { document.getElementById('form-error').textContent = 'Client Name is required'; return; }
+    if (!mobile) { document.getElementById('form-error').textContent = 'Primary Mobile is required'; return; }
+
+    const isExact = document.getElementById('dup-title').textContent.includes('Exact');
+    if (isExact && document.getElementById('dup-warning').style.display !== 'none') {
+      document.getElementById('form-error').textContent = 'Cannot create duplicate — client already exists.';
+      return;
+    }
+    const confirmDup = document.getElementById('confirm-dup').checked;
+
+    const payload = {
+      ClientName:    name,
+      PrimaryMobile: mobile,
+      AlternateMobile: document.getElementById('f-alt-mobile').value.trim()||null,
+      WhatsApp:      document.getElementById('f-whatsapp').value.trim()||null,
+      Email:         document.getElementById('f-email').value.trim()||null,
+      City:          document.getElementById('f-city').value.trim()||null,
+      ClientStatus:  document.getElementById('f-status').value,
+      ClientLifecycle: document.getElementById('f-lifecycle').value,
+      Source:        document.getElementById('f-source').value,
+      AssignedAgentID: document.getElementById('f-agent').value.trim()||'USR-0001',
+      Tags:          Array.from(selectedTags),
+      Notes:         document.getElementById('f-notes').value.trim()||'',
+      confirmDuplicate: confirmDup
+    };
+
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => r.json());
+
+      if (res.ok) {
+        closeModal();
+        window.location.href = `/client-workspace.html?id=${enc(res.data.LeadID)}`;
+      } else if (res.duplicateResult) {
+        // Show dup warning, already rendered
+        document.getElementById('form-error').textContent = res.error || 'Duplicate detected';
+      } else {
+        document.getElementById('form-error').textContent = res.error || 'Failed to create client';
+      }
+    } catch(e) {
+      document.getElementById('form-error').textContent = 'Network error: ' + e.message;
+    }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const TAG_COLORS = { Investor:'tag-investor', VIP:'tag-vip', Hot:'tag-hot', Referral:'tag-referral', NRI:'tag-nri', Buyer:'tag-buyer', Seller:'tag-seller', Corporate:'tag-corporate' };
+  function tagBadge(t) { return `<span class="tag ${TAG_COLORS[t]||'tag-default'}">${esc(t)}</span>`; }
+  function formatBudget(mn, mx) {
+    const fmt = n => n==null?null : n>=1e7 ? `₹${(n/1e7).toFixed(1)}Cr` : n>=1e5 ? `₹${(n/1e5).toFixed(0)}L` : `₹${n.toLocaleString('en-IN')}`;
+    const a=fmt(mn), b=fmt(mx);
+    return [a,b].filter(Boolean).join(' – ') || '—';
+  }
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function enc(s) { return encodeURIComponent(s||''); }
+
+  function buildTagPicker() {
+    const c = document.getElementById('tag-picker');
+    c.innerHTML = TAGS.map(t => `<button type="button" class="tag-opt" data-tag="${t}" onclick="toggleTag('${t}')">${t}</button>`).join('');
+  }
+  function renderTagPicker() {
+    document.querySelectorAll('.tag-opt').forEach(b => {
+      b.classList.toggle('selected', selectedTags.has(b.dataset.tag));
+    });
+  }
+  function toggleTag(t) { if(selectedTags.has(t)) selectedTags.delete(t); else selectedTags.add(t); renderTagPicker(); }
+
+  function buildSourceSelect() {
+    const sel = document.getElementById('f-source');
+    sel.innerHTML = SOURCES.map(s => `<option>${esc(s)}</option>`).join('');
+    sel.value = 'Manual';
+  }
+
+  init();
+</script>
+</body>
+</html>
