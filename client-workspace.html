@@ -3,29 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Client Workspace — Signature Realty</title>
+  <title>Client Workspace — Signature Property</title>
   <style>
     :root {
-      --clr-primary: #1d4ed8; --clr-primary-soft: #eff6ff;
+      --clr-primary: #5c3317; --clr-primary-soft: #fdf8ec;
+      --clr-gold: #b8860b; --clr-gold-mid: #d4a017; --clr-gold-soft: #fdf8ec;
       --clr-success: #16a34a; --clr-warning: #d97706; --clr-danger: #dc2626;
-      --clr-neutral: #6b7280; --clr-bg: #f1f5f9; --clr-card: #ffffff;
-      --clr-border: #e2e8f0; --clr-text: #0f172a; --clr-text-light: #64748b;
-      --radius: 10px; --shadow: 0 2px 8px rgba(0,0,0,.06);
+      --clr-neutral: #6b7280; --clr-bg: #faf7f2; --clr-card: #ffffff;
+      --clr-border: #e8ddd0; --clr-text: #1c0a00; --clr-text-light: #7a6355;
+      --radius: 10px; --shadow: 0 2px 8px rgba(92,51,23,.06);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--clr-bg); color: var(--clr-text); font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; min-height: 100vh; }
 
     /* Nav */
-    .topnav { background: #1e293b; color: #fff; display: flex; align-items: center; padding: 0 24px; height: 52px; gap: 8px; }
-    .topnav a { color: #cbd5e1; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 14px; }
+    .topnav { background: #2c1405; color: #fff; display: flex; align-items: center; padding: 0 24px; height: 52px; gap: 8px; }
+    .topnav a { color: #d4b896; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 14px; }
     .topnav a:hover { background: rgba(255,255,255,.1); color: #fff; }
-    .topnav .brand { font-weight: 700; font-size: 16px; color: #fff; margin-right: 20px; }
-    .topnav .breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #94a3b8; }
-    .topnav .breadcrumb a { color: #94a3b8; }
+    .topnav .brand { font-weight: 800; font-size: 15px; color: var(--clr-gold-mid); margin-right: 20px; letter-spacing:.02em; }
+    .topnav .breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #9a8070; }
+    .topnav .breadcrumb a { color: #9a8070; }
     .topnav-right { margin-left: auto; }
 
     /* Client header */
-    .client-header { background: linear-gradient(135deg,#1e293b 0%,#1d4ed8 100%); color: #fff; padding: 20px 24px; }
+    .client-header { background: linear-gradient(135deg,#2c1405 0%,#5c3317 100%); color: #fff; padding: 20px 24px; }
     .client-header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
     .client-avatar { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex-shrink: 0; }
     .client-name { font-size: 22px; font-weight: 700; }
@@ -35,9 +36,9 @@
     .client-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
     .action-btn { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.1); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all .15s; }
     .action-btn:hover { background: rgba(255,255,255,.25); }
-    .action-btn.green { background: rgba(22,163,74,.7); border-color: rgba(22,163,74,.7); }
-    .action-btn.blue  { background: rgba(37,99,235,.8); border-color: rgba(37,99,235,.8); }
-    .action-btn.accent { background: rgba(217,119,6,.8); border-color: rgba(217,119,6,.8); }
+    .action-btn.green  { background: rgba(22,163,74,.7); border-color: rgba(22,163,74,.7); }
+    .action-btn.blue   { background: rgba(92,51,23,.7); border-color: rgba(92,51,23,.6); }
+    .action-btn.accent { background: rgba(184,134,11,.85); border-color: rgba(184,134,11,.8); }
 
     /* Badges */
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 11.5px; font-weight: 600; }
@@ -74,7 +75,7 @@
     /* Pipeline bar */
     .pipeline-bar { display: flex; gap: 2px; margin: 10px 0 4px; }
     .pipeline-step { flex: 1; height: 4px; border-radius: 2px; background: #e2e8f0; }
-    .pipeline-step.done  { background: #1d4ed8; }
+    .pipeline-step.done  { background: #b8860b; }
     .pipeline-step.current { background: #f59e0b; }
     .pipeline-label { font-size: 11px; color: #64748b; display: flex; justify-content: space-between; }
     .pipeline-current-label { font-size: 11px; font-weight: 700; color: #f59e0b; }
@@ -120,21 +121,23 @@
     .kd-item.editable:hover .kd-value { text-decoration: underline; cursor: pointer; color: var(--clr-primary); }
 
     /* Next Questions */
-    .next-qs { padding: 10px 14px; background: var(--clr-primary-soft); border-radius: 8px; margin-top: 12px; }
-    .next-qs-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--clr-primary); margin-bottom: 6px; }
-    .next-q-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid rgba(29,78,216,.1); }
+    .next-qs { padding: 10px 14px; background: var(--clr-gold-soft); border: 1px solid #e8d07a; border-radius: 8px; margin-top: 12px; }
+    .next-qs-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--clr-gold); margin-bottom: 6px; }
+    .next-q-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid rgba(184,134,11,.15); }
     .next-q-item:last-child { border-bottom: none; }
-    .next-q-item .q-text { flex: 1; color: #1e3a8a; font-weight: 500; }
+    .next-q-item .q-text { flex: 1; color: #5c3317; font-weight: 500; }
     .next-q-btn { font-size: 11px; padding: 3px 10px; background: var(--clr-primary); color: #fff; border: none; border-radius: 5px; cursor: pointer; white-space: nowrap; font-weight: 600; }
     .next-qs-loading { font-size: 12px; color: #64748b; font-style: italic; }
 
     /* Need card actions */
     .need-card-footer { display: flex; gap: 8px; padding: 10px 18px; background: #f8fafc; border-top: 1px solid var(--clr-border); flex-wrap: wrap; }
     .need-action-btn { font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; border: 1px solid; transition: all .15s; }
-    .need-action-btn.primary { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
-    .need-action-btn.primary:hover { background: #1e40af; }
-    .need-action-btn.ghost { background: #fff; color: var(--clr-primary); border-color: #bfdbfe; }
+    .need-action-btn.primary { background: var(--clr-gold); color: #fff; border-color: var(--clr-gold); }
+    .need-action-btn.primary:hover { background: var(--clr-gold-mid); }
+    .need-action-btn.ghost { background: #fff; color: var(--clr-primary); border-color: var(--clr-border); }
     .need-action-btn.ghost:hover { background: var(--clr-primary-soft); }
+    .need-action-btn.danger { background: #fff; color: var(--clr-danger); border-color: #fca5a5; }
+    .need-action-btn.danger:hover { background: #fee2e2; }
 
     /* Stage badge */
     .stage-badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #f0fdf4; color: #166534; }
@@ -146,28 +149,28 @@
     /* Activity feed */
     .activity-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
     .activity-item:last-child { border-bottom: none; }
-    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--clr-primary); flex-shrink: 0; margin-top: 5px; }
-    .activity-type { font-size: 11px; font-weight: 600; color: var(--clr-primary); }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--clr-gold); flex-shrink: 0; margin-top: 5px; }
+    .activity-type { font-size: 11px; font-weight: 600; color: var(--clr-gold); }
     .activity-note { font-size: 12.5px; margin-top: 1px; }
     .activity-time { font-size: 11px; color: var(--clr-text-light); margin-top: 1px; }
 
     /* Followup */
     .followup-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; font-size: 12.5px; }
     .followup-item:last-child { border-bottom: none; }
-    .followup-due { font-size: 11px; font-weight: 700; color: var(--clr-primary); min-width: 72px; }
+    .followup-due { font-size: 11px; font-weight: 700; color: var(--clr-gold); min-width: 72px; }
 
     /* Timeline */
     .timeline-item { display: flex; gap: 10px; padding: 8px 0; position: relative; }
     .timeline-line { position: absolute; left: 8px; top: 24px; bottom: -8px; width: 1px; background: var(--clr-border); }
-    .timeline-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--clr-primary-soft); border: 2px solid var(--clr-primary); flex-shrink: 0; }
+    .timeline-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--clr-gold-soft); border: 2px solid var(--clr-gold); flex-shrink: 0; }
     .timeline-content { flex: 1; }
     .timeline-title { font-size: 13px; font-weight: 600; }
     .timeline-meta { font-size: 11.5px; color: var(--clr-text-light); margin-top: 2px; }
 
     /* Buttons */
     .btn { padding: 7px 16px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid; transition: all .15s; }
-    .btn-primary { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
-    .btn-primary:hover { background: #1e40af; }
+    .btn-primary { background: var(--clr-gold); color: #fff; border-color: var(--clr-gold); }
+    .btn-primary:hover { background: var(--clr-gold-mid); }
     .btn-ghost { background: transparent; color: var(--clr-primary); border-color: var(--clr-primary); }
     .btn-ghost:hover { background: var(--clr-primary-soft); }
     .btn-sm { padding: 4px 10px; font-size: 12px; }
@@ -188,7 +191,7 @@
     .form-group.full { grid-column: 1/-1; }
     label { font-size: 12px; font-weight: 600; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .04em; }
     input, select, textarea { border: 1px solid var(--clr-border); border-radius: 7px; padding: 8px 11px; font-size: 13.5px; outline: none; font-family: inherit; width: 100%; }
-    input:focus, select:focus, textarea:focus { border-color: var(--clr-primary); box-shadow: 0 0 0 3px rgba(29,78,216,.1); }
+    input:focus, select:focus, textarea:focus { border-color: var(--clr-gold); box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
     .form-error { color: #dc2626; font-size: 12px; margin-top: 4px; }
 
     /* Location rows */
@@ -260,7 +263,7 @@
 <body>
 
 <nav class="topnav">
-  <span class="brand">Signature Realty</span>
+  <span class="brand">Signature Property</span>
   <div class="breadcrumb">
     <a href="/clients">Clients</a>
     <span>›</span>
@@ -294,7 +297,7 @@
       <div class="client-actions">
         <a class="action-btn" id="btn-call" href="#" onclick="return callClient()">📞 Call</a>
         <a class="action-btn green" id="btn-whatsapp" href="#" target="_blank">💬 WhatsApp</a>
-        <button class="action-btn accent" onclick="openAddNeedModal()">＋ Add Need</button>
+        <button class="action-btn accent" onclick="openAddNeedModal()">＋ New Requirement</button>
         <button class="action-btn" onclick="openEditModal()">✏️ Edit</button>
       </div>
     </div>
@@ -316,11 +319,11 @@
       <!-- Active Needs -->
       <div style="margin-bottom:20px">
         <div class="section-title">
-          <span>Active Needs</span>
-          <button onclick="openAddNeedModal()">＋ Add Need</button>
+          <span>Requirements</span>
+          <button onclick="openAddNeedModal()">＋ New Requirement</button>
         </div>
         <div id="needs-list">
-          <div class="loader">Loading needs…</div>
+          <div class="loader">Loading requirements…</div>
         </div>
       </div>
 
@@ -449,7 +452,7 @@
 <div class="modal-overlay hidden" id="add-need-modal">
   <div class="modal" style="width:580px">
     <div class="modal-header">
-      <span class="modal-title">Add Need</span>
+      <span class="modal-title">New Requirement</span>
       <button class="modal-close" onclick="closeModal('add-need-modal')">&times;</button>
     </div>
     <div class="modal-body">
@@ -490,7 +493,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('add-need-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveAddNeed()" id="need-save-btn">Add Need</button>
+      <button class="btn btn-primary" onclick="saveAddNeed()" id="need-save-btn">Add Requirement</button>
     </div>
   </div>
 </div>
@@ -572,6 +575,45 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('req-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveRequirement()">Add Requirement</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MARK LOST MODAL ───────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="mark-lost-modal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <span class="modal-title" style="color:#991b1b">Mark Requirement Lost</span>
+      <button class="modal-close" onclick="closeModal('mark-lost-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--clr-text-light);margin-bottom:16px">
+        Mark this requirement as lost. The <strong>client remains active</strong> — only this requirement will be closed.
+      </p>
+      <div id="lost-req-label" style="background:#faf7f2;border:1px solid var(--clr-border);border-radius:7px;padding:10px 14px;font-size:13px;font-weight:600;color:var(--clr-brown);margin-bottom:16px"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Reason *</label>
+          <select id="lost-reason">
+            <option value="">— Select reason —</option>
+            <option>Bought Elsewhere</option>
+            <option>Budget Mismatch</option>
+            <option>Location Mismatch</option>
+            <option>Requirement Cancelled</option>
+            <option>Not Responding</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Notes <span style="font-weight:400;text-transform:none">(optional)</span></label>
+          <textarea id="lost-notes" rows="3" placeholder="Any additional context…"></textarea>
+        </div>
+      </div>
+      <div id="lost-error" class="form-error" style="margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('mark-lost-modal')">Cancel</button>
+      <button class="btn btn-primary" style="background:#dc2626;border-color:#dc2626" onclick="saveMarkLost()">Confirm Lost</button>
     </div>
   </div>
 </div>
@@ -678,7 +720,7 @@
 
   function renderAll() {
     const lead = workspace.lead;
-    document.title = `${lead.ClientName||'Client'} — Signature Realty`;
+    document.title = `${lead.ClientName||'Client'} — Signature Property`;
     document.getElementById('nav-client-name').textContent = lead.ClientName || lead.LeadID;
 
     // Header
@@ -721,48 +763,72 @@
     renderTimeline();
   }
 
-  // ── NEEDS-FIRST PRIMARY SECTION ──────────────────────────────────────────────
+  // ── REQUIREMENTS SECTION ─────────────────────────────────────────────────────
   function renderNeedsFirst() {
     const txns = workspace.transactions || [];
     const reqs = workspace.requirements || [];
     const container = document.getElementById('needs-list');
 
-    if (!txns.length) {
+    if (!reqs.length && !txns.length) {
       container.innerHTML = `<div class="empty-state">
         <div class="empty-icon">🏠</div>
-        <p>No active needs yet.<br>Start by capturing the client's first requirement.</p>
-        <button class="btn btn-primary" onclick="openAddNeedModal()">＋ Add First Need</button>
+        <p>No requirements yet.<br>Start by capturing the client's first requirement.</p>
+        <button class="btn btn-primary" onclick="openAddNeedModal()">＋ Add First Requirement</button>
       </div>`;
       return;
     }
 
+    // Helper to find parent transaction
+    const findTxn = r => txns.find(t => t.TransactionID === r.TransactionID) || { TransactionType: r.TransactionType };
+
+    // Split active vs. closed/lost
+    const activeReqs = reqs.filter(r => !['Lost','Closed','Archived'].includes(r.RequirementStatus||r.Status));
+    const closedReqs = reqs.filter(r =>  ['Lost','Closed','Archived'].includes(r.RequirementStatus||r.Status));
+
     let html = '';
-    for (const txn of txns) {
-      const txnReqs = reqs.filter(r => r.TransactionID === txn.TransactionID);
-      const typeCls  = 'type-' + (txn.TransactionType||txn.Type||'').toLowerCase().replace(/[\s]/g,'');
-      html += `<div class="need-group">
-        <div class="need-group-header">
-          <span class="txn-type-badge ${typeCls}">${esc(txn.TransactionType||txn.Type||'—')}</span>
-          <span class="txn-id">${esc(txn.TransactionID)}</span>
-          <span class="badge badge-${(txn.TransactionStatus||txn.Status||'open').toLowerCase()}">${esc(txn.TransactionStatus||txn.Status||'Open')}</span>
-          <button class="need-action-btn ghost btn-sm" style="margin-left:auto" onclick="openAddReqModal('${esc(txn.TransactionID)}')">＋ Requirement</button>
-        </div>
-        ${txnReqs.length
-          ? txnReqs.map(r => needCard(txn, r)).join('')
-          : `<div class="empty-state" style="padding:20px">
-              <p style="font-size:13px">No requirement captured yet.</p>
-              <button class="btn btn-ghost btn-sm" onclick="openAddReqModal('${esc(txn.TransactionID)}')">Capture Need</button>
-            </div>`
-        }
+
+    if (!activeReqs.length && closedReqs.length) {
+      html += `<div class="empty-state" style="padding:20px 0">
+        <p style="font-size:13px;color:var(--clr-text-light)">No active requirements.</p>
       </div>`;
+    }
+
+    // Active requirements — shown directly (no group wrappers)
+    html += activeReqs.map(r => needCard(findTxn(r), r)).join('');
+
+    // Closed / Lost requirements — compact collapsed section
+    if (closedReqs.length) {
+      html += `<details style="margin-top:20px">
+        <summary style="cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--clr-text-light);border-top:1px solid var(--clr-border);padding-top:14px;list-style:none;display:flex;align-items:center;gap:6px">
+          <span style="font-size:14px">›</span> Past / Lost (${closedReqs.length})
+        </summary>
+        <div style="margin-top:10px">
+          ${closedReqs.map(r => lostReqCard(findTxn(r), r)).join('')}
+        </div>
+      </details>`;
     }
 
     container.innerHTML = html;
 
-    // Load next-questions async for each requirement (read-only, never mutates)
-    for (const req of reqs) {
+    // Load next-questions async for active requirements
+    for (const req of activeReqs) {
       loadNextQuestionsForCard(req.RequirementID);
     }
+  }
+
+  function lostReqCard(txn, r) {
+    const titleParts = [txn.TransactionType||r.TransactionType, r.Category, r.SubCategory].filter(Boolean);
+    const budgetStr  = formatBudget(r.BudgetMin, r.BudgetMax);
+    const lostReason = r.LostReason || r.RequirementStatus || '';
+    return `<div style="background:#fff;border:1px solid #fecaca;border-radius:8px;padding:11px 15px;margin-bottom:8px;opacity:.82">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#991b1b">${titleParts.map(esc).join(' • ')||'Requirement'}</span>
+        <span style="font-size:11px;color:#b0a0a0">${esc(r.RequirementID)}</span>
+        <span style="background:#fee2e2;color:#991b1b;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px">${esc(lostReason)}</span>
+        ${budgetStr && budgetStr!=='—' ? `<span style="font-size:12px;color:#9ca3af">${esc(budgetStr)}</span>` : ''}
+        ${r.LostNotes ? `<span style="font-size:11px;color:#b0a0a0;font-style:italic">${esc(r.LostNotes)}</span>` : ''}
+      </div>
+    </div>`;
   }
 
   function needCard(txn, r) {
@@ -775,6 +841,7 @@
     const unknownFields = extractUnknownFields(r);
 
     const titleParts = [
+      txn.TransactionType || r.TransactionType || null,
       r.Category || null,
       r.SubCategory || null,
     ].filter(Boolean);
@@ -810,9 +877,9 @@
       </div>
 
       <div class="need-card-footer">
-        <button class="need-action-btn primary" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update Need</button>
-        <button class="need-action-btn ghost"   onclick="showNextQuestionsSection('${esc(reqId)}')">💬 Ask Questions</button>
-        <button class="need-action-btn ghost"   onclick="viewScoreBreakdown('${esc(reqId)}')">⭐ Score</button>
+        <button class="need-action-btn primary" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update Requirement</button>
+        <button class="need-action-btn ghost"   onclick="showNextQuestionsSection('${esc(reqId)}')">💬 Ask</button>
+        <button class="need-action-btn danger"  onclick="markLostReq('${esc(reqId)}')">✗ Mark Lost</button>
       </div>
     </div>`;
   }
@@ -1096,6 +1163,42 @@
     _inlineField  = null;
   }
 
+  // ── Mark Lost ─────────────────────────────────────────────────────────────────
+  let _markLostReqId = null;
+
+  function markLostReq(reqId) {
+    _markLostReqId = reqId;
+    const req = (workspace.requirements||[]).find(r => r.RequirementID === reqId);
+    const txn = (workspace.transactions||[]).find(t => t.TransactionID === req?.TransactionID) || {};
+    const label = [txn.TransactionType||req?.TransactionType, req?.Category, req?.SubCategory].filter(Boolean).join(' • ') || reqId;
+    document.getElementById('lost-req-label').textContent = label + ' — ' + reqId;
+    document.getElementById('lost-reason').value = '';
+    document.getElementById('lost-notes').value  = '';
+    document.getElementById('lost-error').textContent = '';
+    document.getElementById('mark-lost-modal').classList.remove('hidden');
+  }
+
+  async function saveMarkLost() {
+    const reason = document.getElementById('lost-reason').value;
+    if (!reason) { document.getElementById('lost-error').textContent = 'Please select a reason'; return; }
+    const notes  = document.getElementById('lost-notes').value.trim();
+    try {
+      const res = await fetch(`/api/requirements/${encodeURIComponent(_markLostReqId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequirementStatus: 'Lost', LostReason: reason, LostNotes: notes || null })
+      }).then(r => r.json());
+      if (res.ok) {
+        closeModal('mark-lost-modal');
+        await loadWorkspace();
+      } else {
+        document.getElementById('lost-error').textContent = res.error || 'Failed to mark lost';
+      }
+    } catch(e) {
+      document.getElementById('lost-error').textContent = e.message;
+    }
+  }
+
   // ── Score breakdown ───────────────────────────────────────────────────────────
   async function viewScoreBreakdown(reqId) {
     try {
@@ -1117,7 +1220,7 @@
     document.getElementById('dynamic-fields').innerHTML = '';
     const txns = workspace.transactions || [];
     const sel = document.getElementById('req-txn-id');
-    sel.innerHTML = txns.map(t => `<option value="${enc(t.TransactionID)}" ${t.TransactionID===req.TransactionID?'selected':''}>${esc(t.TransactionType||t.Type)} — ${esc(t.TransactionID)}</option>`).join('');
+    sel.innerHTML = txns.map(t => `<option value="${enc(t.TransactionID)}" ${t.TransactionID===req.TransactionID?'selected':''}>${esc(t.TransactionType||t.Type||'—')}</option>`).join('');
     document.getElementById('req-category').value    = req.Category   || '';
     document.getElementById('req-budget-min').value  = req.BudgetMin  != null ? req.BudgetMin : '';
     document.getElementById('req-budget-max').value  = req.BudgetMax  != null ? req.BudgetMax : '';

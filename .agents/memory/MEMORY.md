@@ -8,4 +8,5 @@
 - [Phase 11 Next Question Engine](phase11-next-question.md) — V2NextQuestionService: read-only, consumes DependencyEngine (Phase 10) + FieldConfig; rank=CORE>IMPORTANT>OPTIONAL then DisplayOrder; never use words "inventory", "matching", "deal" in source (Suite 39 guard)
 - [Phase 13 Pending](phase13-pending.md) — Quick Capture deferred; full contract saved; do NOT implement until explicitly approved
 - [V2Router Feature Flag Gate](v2router-feature-flag.md) — /api/v2/* canonical routes must come BEFORE the isV2Enabled() gate. Fixed by changing gate to: if (!isV2Enabled() && !pathname.startsWith('/api/v2/')) return null. Shared /api/leads* routes are gated; /api/v2/* always active.
-- [Phases 14-20 Complete](phases-14-20-complete.md) — All phases + rollback safety + preview wiring done; 874/874 tests
+- [Phases 14-20 Complete](phases-14-20-complete.md) — All phases + rollback safety + preview wiring done; 872/872 tests
+- [UX-UI Design Freeze](ux-ui-design-freeze.md) — Brown/gold theme applied; business model: CLIENT→REQUIREMENT only (no txn groups); REQUIREMENTS label; Mark Lost modal; nav trimmed to 10 agent modules

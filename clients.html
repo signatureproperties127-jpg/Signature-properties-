@@ -3,116 +3,108 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Signature Realty — Clients</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <title>Signature Property — Clients</title>
   <style>
-    /* ── Client List V2 ── */
     :root {
-      --clr-primary: #1d4ed8;
-      --clr-primary-soft: #eff6ff;
+      --clr-brown: #5c3317;
+      --clr-brown-dark: #2c1405;
+      --clr-brown-mid: #7a4a28;
+      --clr-gold: #b8860b;
+      --clr-gold-mid: #d4a017;
+      --clr-gold-soft: #fdf8ec;
+      --clr-yellow: #f59e0b;
+      --clr-yellow-soft: #fffbeb;
       --clr-success: #16a34a;
       --clr-warning: #d97706;
       --clr-danger: #dc2626;
       --clr-neutral: #6b7280;
-      --clr-bg: #f9fafb;
+      --clr-bg: #faf7f2;
       --clr-card: #ffffff;
-      --clr-border: #e5e7eb;
-      --clr-text: #111827;
-      --clr-text-light: #6b7280;
+      --clr-border: #e8ddd0;
+      --clr-text: #1c0a00;
+      --clr-text-light: #7a6355;
       --radius: 10px;
     }
-    body { background: var(--clr-bg); color: var(--clr-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--clr-bg); color: var(--clr-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
     /* ── Top Nav ── */
-    .topnav { background: #1e293b; color: #fff; display: flex; align-items: center; padding: 0 24px; height: 52px; gap: 8px; }
-    .topnav a { color: #cbd5e1; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 14px; }
-    .topnav a.active, .topnav a:hover { background: rgba(255,255,255,0.1); color: #fff; }
-    .topnav .brand { font-weight: 700; font-size: 16px; color: #fff; margin-right: 24px; }
+    .topnav { background: var(--clr-brown-dark); color: #fff; display: flex; align-items: center; padding: 0 24px; height: 52px; gap: 4px; flex-wrap: nowrap; }
+    .topnav .brand { font-weight: 800; font-size: 15px; color: var(--clr-gold-mid); margin-right: 20px; letter-spacing: .02em; white-space: nowrap; }
+    .topnav a { color: #d4b896; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13.5px; white-space: nowrap; }
+    .topnav a.active { background: rgba(212,160,23,.18); color: var(--clr-gold-mid); font-weight: 600; }
+    .topnav a:hover:not(.active) { background: rgba(255,255,255,.08); color: #fff; }
     .topnav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
     /* ── Page layout ── */
-    .page { display: flex; flex-direction: column; height: calc(100vh - 52px); overflow: hidden; }
+    .page { display: flex; flex-direction: column; min-height: calc(100vh - 52px); }
     .page-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-    .page-title { font-size: 22px; font-weight: 700; margin: 0; }
-    .content-area { flex: 1; overflow: auto; padding: 0 24px 24px; }
+    .page-title { font-size: 22px; font-weight: 800; margin: 0; color: var(--clr-brown); }
+    .content-area { flex: 1; padding: 0 24px 32px; }
+
+    /* ── Stats bar ── */
+    .stats-bar { display: flex; gap: 14px; padding: 16px 0 0; flex-wrap: wrap; margin-bottom: 4px; }
+    .stat { background: #fff; border: 1px solid var(--clr-border); border-radius: 8px; padding: 12px 18px; min-width: 100px; }
+    .stat-val { font-size: 24px; font-weight: 800; color: var(--clr-gold); }
+    .stat-lbl { font-size: 11px; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .05em; margin-top: 1px; }
 
     /* ── Toolbar ── */
     .toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 0; flex-wrap: wrap; }
     .search-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--clr-border); border-radius: 8px; padding: 7px 12px; min-width: 260px; }
-    .search-box input { border: none; outline: none; font-size: 14px; flex: 1; background: transparent; }
+    .search-box input { border: none; outline: none; font-size: 14px; flex: 1; background: transparent; color: var(--clr-text); }
     .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; }
-    .filter-chip { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--clr-border); background: #fff; font-size: 13px; cursor: pointer; white-space: nowrap; transition: all .15s; }
-    .filter-chip.active { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
-    .filter-chip:hover:not(.active) { background: var(--clr-primary-soft); }
-
-    /* ── Stats bar ── */
-    .stats-bar { display: flex; gap: 16px; padding: 0 0 14px; }
-    .stat { background: #fff; border: 1px solid var(--clr-border); border-radius: 8px; padding: 10px 16px; min-width: 100px; }
-    .stat-val { font-size: 22px; font-weight: 700; color: var(--clr-primary); }
-    .stat-lbl { font-size: 11px; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .05em; }
+    .filter-chip { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--clr-border); background: #fff; font-size: 13px; cursor: pointer; white-space: nowrap; transition: all .15s; color: var(--clr-text-light); }
+    .filter-chip.active { background: var(--clr-brown); color: #fff; border-color: var(--clr-brown); }
+    .filter-chip:hover:not(.active) { background: var(--clr-gold-soft); border-color: var(--clr-gold-mid); color: var(--clr-brown); }
 
     /* ── Table ── */
-    .table-wrap { background: #fff; border-radius: var(--radius); border: 1px solid var(--clr-border); overflow: hidden; }
+    .table-wrap { background: #fff; border-radius: var(--radius); border: 1px solid var(--clr-border); overflow: hidden; margin-top: 4px; }
     table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    thead th { background: #f8fafc; text-align: left; padding: 10px 14px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--clr-text-light); border-bottom: 1px solid var(--clr-border); white-space: nowrap; cursor: pointer; user-select: none; }
-    thead th:hover { background: #f1f5f9; }
+    thead th { background: #faf6f0; text-align: left; padding: 10px 14px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--clr-text-light); border-bottom: 1px solid var(--clr-border); white-space: nowrap; cursor: pointer; user-select: none; }
+    thead th:hover { background: #f5ede0; color: var(--clr-brown); }
     tbody tr { border-bottom: 1px solid var(--clr-border); transition: background .1s; }
     tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: #f8fafc; }
+    tbody tr:hover { background: var(--clr-gold-soft); }
     td { padding: 11px 14px; vertical-align: middle; }
 
     /* ── Status badges ── */
     .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
-    .badge-new       { background: #e0f2fe; color: #0369a1; }
-    .badge-verified  { background: #dcfce7; color: #15803d; }
-    .badge-active    { background: #d1fae5; color: #047857; }
-    .badge-inactive  { background: #f3f4f6; color: #6b7280; }
-    .badge-blacklisted { background: #fee2e2; color: #991b1b; }
+    .badge-new        { background: #e0f2fe; color: #0369a1; }
+    .badge-verified   { background: #dcfce7; color: #15803d; }
+    .badge-active     { background: #d1fae5; color: #047857; }
+    .badge-inactive   { background: #f3f4f6; color: #6b7280; }
+    .badge-blacklisted{ background: #fee2e2; color: #991b1b; }
 
-    /* ── Tags ── */
-    .tag { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; margin: 1px 2px; }
-    .tag-investor  { background: #f3e8ff; color: #7c3aed; }
-    .tag-vip       { background: #fef9c3; color: #854d0e; }
-    .tag-hot       { background: #fee2e2; color: #b91c1c; }
-    .tag-referral  { background: #e0e7ff; color: #4338ca; }
-    .tag-nri       { background: #fae8ff; color: #86198f; }
-    .tag-buyer     { background: #dbeafe; color: #1d4ed8; }
-    .tag-seller    { background: #dcfce7; color: #15803d; }
-    .tag-corporate { background: #ccfbf1; color: #0f766e; }
-    .tag-default   { background: #f3f4f6; color: #4b5563; }
+    /* ── Active Reqs pill ── */
+    .reqs-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 12px; font-weight: 700; background: var(--clr-gold-soft); color: var(--clr-gold); border: 1px solid #e8d07a; }
+    .reqs-pill.zero { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
 
-    /* ── Score ── */
-    .score-pill { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 22px; border-radius: 11px; font-size: 12px; font-weight: 700; }
-    .score-high { background: #d1fae5; color: #065f46; }
-    .score-mid  { background: #fef3c7; color: #92400e; }
-    .score-low  { background: #fee2e2; color: #991b1b; }
-
-    /* ── Add Client Btn ── */
-    .btn-primary { background: var(--clr-primary); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-    .btn-primary:hover { background: #1e40af; }
+    /* ── Buttons ── */
+    .btn-primary { background: var(--clr-gold); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background .15s; }
+    .btn-primary:hover { background: var(--clr-gold-mid); }
 
     /* ── Client link ── */
-    .client-link { font-weight: 600; color: var(--clr-primary); text-decoration: none; }
-    .client-link:hover { text-decoration: underline; }
+    .client-link { font-weight: 700; color: var(--clr-brown); text-decoration: none; }
+    .client-link:hover { color: var(--clr-gold); text-decoration: underline; }
 
     /* ── Empty state ── */
     .empty-state { text-align: center; padding: 48px 24px; color: var(--clr-text-light); }
-    .empty-state svg { margin-bottom: 12px; opacity: .4; }
-
-    /* ── Pagination ── */
-    .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 14px 0; font-size: 13px; color: var(--clr-text-light); }
-    .page-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--clr-border); background: #fff; cursor: pointer; font-size: 13px; }
-    .page-btn.active { background: var(--clr-primary); color: #fff; border-color: var(--clr-primary); }
 
     /* ── Loader ── */
     .loader { text-align: center; padding: 48px; color: var(--clr-text-light); }
 
+    /* ── Pagination ── */
+    .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 14px 0; font-size: 13px; color: var(--clr-text-light); }
+    .page-btn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--clr-border); background: #fff; cursor: pointer; font-size: 13px; transition: all .15s; }
+    .page-btn.active { background: var(--clr-brown); color: #fff; border-color: var(--clr-brown); }
+    .page-btn:hover:not(.active) { background: var(--clr-gold-soft); border-color: var(--clr-gold-mid); }
+
     /* ── Modal ── */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; display: flex; align-items: center; justify-content: center; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; }
     .modal-overlay.hidden { display: none; }
-    .modal { background: #fff; border-radius: 12px; width: 540px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
-    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
-    .modal-title { font-size: 17px; font-weight: 700; }
+    .modal { background: #fff; border-radius: 14px; width: 560px; max-width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--clr-border); }
+    .modal-title { font-size: 17px; font-weight: 800; color: var(--clr-brown); }
     .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--clr-text-light); padding: 0 4px; }
     .modal-body { padding: 20px 24px; }
     .modal-footer { padding: 16px 24px; border-top: 1px solid var(--clr-border); display: flex; justify-content: flex-end; gap: 10px; }
@@ -121,39 +113,40 @@
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .form-group { display: flex; flex-direction: column; gap: 5px; }
     .form-group.full { grid-column: 1/-1; }
-    label { font-size: 12.5px; font-weight: 600; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .04em; }
-    input, select, textarea { border: 1px solid var(--clr-border); border-radius: 7px; padding: 8px 11px; font-size: 14px; outline: none; font-family: inherit; width: 100%; box-sizing: border-box; }
-    input:focus, select:focus, textarea:focus { border-color: var(--clr-primary); box-shadow: 0 0 0 3px rgba(29,78,216,.12); }
+    label { font-size: 12px; font-weight: 700; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .05em; }
+    input, select, textarea { border: 1px solid var(--clr-border); border-radius: 7px; padding: 9px 12px; font-size: 14px; outline: none; font-family: inherit; width: 100%; box-sizing: border-box; color: var(--clr-text); }
+    input:focus, select:focus, textarea:focus { border-color: var(--clr-gold); box-shadow: 0 0 0 3px rgba(184,134,11,.12); }
     .form-error { color: var(--clr-danger); font-size: 12px; margin-top: 2px; }
+    .section-divider { border-top: 1px solid var(--clr-border); margin: 16px 0 12px; padding-top: 14px; }
+    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--clr-text-light); margin-bottom: 12px; }
+    .btn-cancel { background: #f3f4f6; color: var(--clr-text-light); border: 1px solid var(--clr-border); border-radius: 8px; padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-cancel:hover { background: #e5e7eb; }
 
     /* ── Dup warning ── */
-    .dup-warning { background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+    .dup-warning { background: var(--clr-yellow-soft); border: 1px solid #f59e0b; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
     .dup-warning-title { font-weight: 700; color: #92400e; margin-bottom: 6px; }
     .dup-candidate { padding: 6px 0; border-bottom: 1px solid #fde68a; font-size: 13px; }
     .dup-candidate:last-child { border-bottom: none; }
 
-    /* ── Tag picker ── */
-    .tag-picker { display: flex; gap: 6px; flex-wrap: wrap; }
-    .tag-opt { padding: 4px 10px; border-radius: 14px; border: 1px solid var(--clr-border); background: #fff; font-size: 12px; cursor: pointer; transition: all .15s; }
-    .tag-opt.selected { border-color: var(--clr-primary); background: var(--clr-primary-soft); color: var(--clr-primary); }
-
     @media (max-width: 768px) {
       .form-grid { grid-template-columns: 1fr; }
-      .stats-bar { flex-wrap: wrap; }
+      .stats-bar { gap: 10px; }
+      .stat { min-width: 80px; padding: 10px 14px; }
+      td:nth-child(4), th:nth-child(4) { display: none; } /* hide Active Reqs on mobile */
+      .topnav a { display: none; }
+      .topnav a.active, .topnav .brand { display: block; }
     }
   </style>
 </head>
 <body>
 
-<!-- Top Nav -->
 <nav class="topnav">
-  <span class="brand">Signature Realty</span>
+  <span class="brand">Signature Property</span>
   <a href="/">Dashboard</a>
   <a href="/clients" class="active">Clients</a>
-  <a href="/requirements-view">Requirements</a>
-  <a href="/index.html">Leads (V1)</a>
+  <a href="/requirements-view">All Requirements</a>
   <div class="topnav-right">
-    <a href="/login.html" style="color:#94a3b8;font-size:13px;">Logout</a>
+    <a href="/login.html" style="color:#9a8070;font-size:13px;">Logout</a>
   </div>
 </nav>
 
@@ -161,7 +154,7 @@
   <div class="page-header">
     <h1 class="page-title">Clients</h1>
     <button class="btn-primary" onclick="openAddModal()">
-      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
       Add Client
     </button>
   </div>
@@ -172,7 +165,7 @@
       <div class="stat"><div class="stat-val" id="stat-total">—</div><div class="stat-lbl">Total</div></div>
       <div class="stat"><div class="stat-val" id="stat-active">—</div><div class="stat-lbl">Active</div></div>
       <div class="stat"><div class="stat-val" id="stat-new">—</div><div class="stat-lbl">New</div></div>
-      <div class="stat"><div class="stat-val" id="stat-verified">—</div><div class="stat-lbl">Verified</div></div>
+      <div class="stat"><div class="stat-val" id="stat-reqs">—</div><div class="stat-lbl">Active Needs</div></div>
     </div>
 
     <!-- Toolbar -->
@@ -200,17 +193,15 @@
             <th onclick="sort('ClientName')">Client ▾</th>
             <th>Mobile</th>
             <th onclick="sort('ClientStatus')">Status</th>
-            <th>Lifecycle</th>
-            <th>Tags</th>
-            <th onclick="sort('ClientScore')">Score</th>
-            <th>Requirements</th>
+            <th>Active Requirements</th>
             <th>Budget</th>
             <th>Location</th>
+            <th onclick="sort('UpdatedAt')">Last Activity</th>
             <th>Agent</th>
           </tr>
         </thead>
         <tbody id="clients-tbody">
-          <tr><td colspan="10" class="loader">Loading clients…</td></tr>
+          <tr><td colspan="8" class="loader">Loading clients…</td></tr>
         </tbody>
       </table>
     </div>
@@ -224,7 +215,7 @@
 <div class="modal-overlay hidden" id="add-modal">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title" id="modal-title">Add Client</span>
+      <span class="modal-title">Add Client</span>
       <button class="modal-close" onclick="closeModal()">&times;</button>
     </div>
     <div class="modal-body">
@@ -233,13 +224,13 @@
         <div class="dup-warning-title" id="dup-title">⚠️ Possible duplicate detected</div>
         <div id="dup-candidates"></div>
         <div style="margin-top:10px;font-size:13px;">
-          <label>
+          <label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:#92400e;cursor:pointer">
             <input type="checkbox" id="confirm-dup" /> &nbsp;This is a new client — create anyway
           </label>
         </div>
       </div>
 
-      <!-- V2 Minimal Capture — Name + Phone + initial need (optional) -->
+      <!-- Identity -->
       <div class="form-grid">
         <div class="form-group full">
           <label>Client Name *</label>
@@ -251,13 +242,12 @@
         </div>
       </div>
 
-      <div style="margin:16px 0 10px;border-top:1px solid #e2e8f0;padding-top:14px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:10px">
-          Initial Requirement <span style="font-weight:400;text-transform:none">(optional — add more from workspace)</span>
-        </div>
+      <!-- Initial Requirement (optional) -->
+      <div class="section-divider">
+        <div class="section-label">Initial Requirement <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional — add more from workspace)</span></div>
         <div class="form-grid">
           <div class="form-group">
-            <label>Transaction Type</label>
+            <label>Transaction</label>
             <select id="f-txn-type">
               <option value="">— Not specified —</option>
               <option>Purchase</option>
@@ -265,6 +255,7 @@
               <option>Rent</option>
               <option>Rent Out</option>
               <option>Lease</option>
+              <option>Lease Out</option>
             </select>
           </div>
           <div class="form-group">
@@ -279,11 +270,11 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Location(s)</label>
+            <label>Location</label>
             <input id="f-location" type="text" placeholder="e.g. Vesu, Surat" />
           </div>
           <div class="form-group">
-            <label>Budget Max (₹)</label>
+            <label>Budget (₹)</label>
             <input id="f-budget" type="number" placeholder="e.g. 10000000" />
           </div>
         </div>
@@ -291,7 +282,7 @@
       <div id="form-error" class="form-error"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn-primary" style="background:#6b7280;" onclick="closeModal()">Cancel</button>
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" onclick="submitClient()">Save Client</button>
     </div>
   </div>
@@ -306,9 +297,8 @@
   let sortDir     = -1;
   let activeFilter = '';
   let searchQ      = '';
-  let searchTimer = null;
+  let searchTimer  = null;
 
-  // ── Init ────────────────────────────────────────────────────────────────────
   async function init() {
     await loadClients();
     setupFilterChips();
@@ -316,22 +306,19 @@
 
   async function loadClients() {
     try {
-      // V2 endpoint returns enriched clients with _needSummaries embedded
       const res = await fetch('/api/v2/clients').then(r => r.json());
       const clients = res.data || [];
-
       allClients = clients.map(c => ({
         ...c,
-        _reqs:     c._needSummaries || [],
+        _reqs:      c._needSummaries || [],
         _latestReq: (c._needSummaries||[])[0] || null,
-        _reqCount:  c._activeNeeds  || 0
+        _reqCount:  c._activeNeeds || 0
       }));
-
       updateStats();
       applyFilter();
     } catch(e) {
       document.getElementById('clients-tbody').innerHTML =
-        `<tr><td colspan="10" class="loader" style="color:#dc2626">Failed to load clients: ${e.message}</td></tr>`;
+        `<tr><td colspan="8" class="loader" style="color:#dc2626">Failed to load clients: ${e.message}</td></tr>`;
     }
   }
 
@@ -339,15 +326,15 @@
     const s = allClients.reduce((acc, c) => {
       acc.total++;
       const st = c.ClientStatus || c.LeadStatus || '';
-      if (st === 'Active') acc.active++;
-      if (st === 'New') acc.new++;
-      if (st === 'Verified') acc.verified++;
+      if (st === 'Active')   acc.active++;
+      if (st === 'New')      acc.new++;
+      acc.reqs += (c._reqCount || 0);
       return acc;
-    }, { total:0, active:0, new:0, verified:0 });
-    document.getElementById('stat-total').textContent    = s.total;
-    document.getElementById('stat-active').textContent   = s.active;
-    document.getElementById('stat-new').textContent      = s.new;
-    document.getElementById('stat-verified').textContent = s.verified;
+    }, { total:0, active:0, new:0, reqs:0 });
+    document.getElementById('stat-total').textContent  = s.total;
+    document.getElementById('stat-active').textContent = s.active;
+    document.getElementById('stat-new').textContent    = s.new;
+    document.getElementById('stat-reqs').textContent   = s.reqs;
   }
 
   function applyFilter() {
@@ -397,34 +384,31 @@
     const page  = filtered.slice(start, start + PAGE_SIZE);
 
     if (!page.length) {
-      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">No clients found.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">No clients found.</div></td></tr>`;
       document.getElementById('pagination').innerHTML = '';
       return;
     }
 
     tbody.innerHTML = page.map(c => {
       const status    = c.ClientStatus || c.LeadStatus || 'New';
-      const lifecycle = c.ClientLifecycle || '—';
       const phone     = c.PrimaryMobile || c.Phone || '—';
-      const tags      = (c.Tags||[]).map(t => tagBadge(t)).join('');
-      const score     = c.ClientScore;
-      const scoreVal  = typeof score === 'object' ? score?.total : score;
-      const scoreCls  = scoreVal >= 70 ? 'score-high' : scoreVal >= 40 ? 'score-mid' : 'score-low';
+      const reqCount  = c._reqCount || 0;
       const latestReq = c._latestReq;
       const budget    = latestReq ? formatBudget(latestReq.BudgetMin, latestReq.BudgetMax) : '—';
-      const location  = latestReq ? (latestReq.Location1||'—') : '—';
+      const location  = latestReq ? (latestReq.Location1 || '—') : '—';
+      const lastAct   = c.UpdatedAt ? relativeDate(c.UpdatedAt) : '—';
       return `<tr>
-        <td><a class="client-link" href="/client-workspace?id=${enc(c.LeadID)}">${esc(c.ClientName||'—')}</a><br>
-          <span style="font-size:11px;color:#94a3b8">${esc(c.LeadID)}</span></td>
-        <td>${esc(phone)}</td>
+        <td>
+          <a class="client-link" href="/client-workspace?id=${enc(c.LeadID)}">${esc(c.ClientName||'—')}</a><br>
+          <span style="font-size:11px;color:#b09080">${esc(c.LeadID)}</span>
+        </td>
+        <td style="font-size:13px">${esc(phone)}</td>
         <td><span class="badge badge-${status.toLowerCase()}">${esc(status)}</span></td>
-        <td style="font-size:12.5px;color:#64748b">${esc(lifecycle)}</td>
-        <td>${tags||'<span style="color:#d1d5db">—</span>'}</td>
-        <td>${scoreVal != null ? `<span class="score-pill ${scoreCls}">${scoreVal}</span>` : '—'}</td>
-        <td style="text-align:center">${c._reqCount || 0}</td>
-        <td style="font-size:12.5px;color:#64748b">${esc(budget)}</td>
-        <td style="font-size:12.5px;color:#64748b">${esc(location)}</td>
-        <td style="font-size:12px;color:#94a3b8">${esc(c.AssignedAgentID||'—')}</td>
+        <td style="text-align:center"><span class="reqs-pill${reqCount===0?' zero':''}">${reqCount}</span></td>
+        <td style="font-size:12.5px;color:var(--clr-text-light)">${esc(budget)}</td>
+        <td style="font-size:12.5px;color:var(--clr-text-light)">${esc(location)}</td>
+        <td style="font-size:12px;color:var(--clr-text-light)">${esc(lastAct)}</td>
+        <td style="font-size:12px;color:#b09080">${esc(c.AssignedAgentID||'—')}</td>
       </tr>`;
     }).join('');
 
@@ -434,7 +418,7 @@
   function renderPagination() {
     const total = Math.ceil(filtered.length / PAGE_SIZE);
     const pag   = document.getElementById('pagination');
-    if (total <= 1) { pag.innerHTML=''; return; }
+    if (total <= 1) { pag.innerHTML = filtered.length ? `<span>${filtered.length} clients</span>` : ''; return; }
     let html = `<span>${filtered.length} clients</span>`;
     for (let i=1; i<=total; i++) {
       html += `<button class="page-btn${i===currentPage?' active':''}" onclick="gotoPage(${i})">${i}</button>`;
@@ -460,33 +444,27 @@
     });
   }
 
-  // ── Duplicate check ─────────────────────────────────────────────────────────
+  // ── Duplicate check ──────────────────────────────────────────────────────────
   async function checkDuplicate() {
     const mobile = document.getElementById('f-mobile').value;
-    const email  = document.getElementById('f-email').value;
-    if (!mobile && !email) return;
+    if (!mobile) return;
     try {
       const res = await fetch('/api/v2/clients/check-duplicate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ PrimaryMobile: mobile, Email: email, ClientName: document.getElementById('f-name').value })
+        body: JSON.stringify({ PrimaryMobile: mobile, ClientName: document.getElementById('f-name').value })
       }).then(r => r.json());
-
       const warn = document.getElementById('dup-warning');
       if (res.result === 'EXACT_MATCH') {
-        document.getElementById('dup-title').textContent = '🚫 Exact duplicate found — this client already exists';
+        document.getElementById('dup-title').textContent = '🚫 Exact duplicate — client already exists';
         document.getElementById('dup-candidates').innerHTML = renderCandidates(res.candidates);
         document.getElementById('confirm-dup').parentElement.style.display='none';
-        warn.style.display='block';
-        warn.style.borderColor='#ef4444';
-        warn.style.background='#fef2f2';
+        warn.style.display='block'; warn.style.borderColor='#ef4444'; warn.style.background='#fef2f2';
       } else if (res.result === 'POSSIBLE_MATCH') {
         document.getElementById('dup-title').textContent = '⚠️ Possible duplicate detected';
         document.getElementById('dup-candidates').innerHTML = renderCandidates(res.candidates);
         document.getElementById('confirm-dup').parentElement.style.display='';
-        warn.style.display='block';
-        warn.style.borderColor='#f59e0b';
-        warn.style.background='#fffbeb';
+        warn.style.display='block'; warn.style.borderColor='#f59e0b'; warn.style.background='#fffbeb';
       } else {
         warn.style.display='none';
       }
@@ -495,8 +473,8 @@
 
   function renderCandidates(list) {
     return (list||[]).map(c => `<div class="dup-candidate">
-      <strong>${esc(c.ClientName||'—')}</strong> &nbsp;•&nbsp; ${esc(c.MaskedMobile||'—')} &nbsp;•&nbsp; ${esc(c.MaskedEmail||'—')}
-      &nbsp;<a href="/client-workspace?id=${enc(c.LeadID)}" target="_blank" style="font-size:12px;color:#2563eb">View →</a>
+      <strong>${esc(c.ClientName||'—')}</strong> &nbsp;•&nbsp; ${esc(c.MaskedMobile||'—')}
+      &nbsp;<a href="/client-workspace?id=${enc(c.LeadID)}" target="_blank" style="font-size:12px;color:var(--clr-gold)">View →</a>
     </div>`).join('');
   }
 
@@ -506,7 +484,8 @@
     document.getElementById('dup-warning').style.display='none';
     document.getElementById('form-error').textContent='';
     ['f-name','f-mobile','f-location','f-budget'].forEach(id => {
-      document.getElementById(id).value='';
+      const el = document.getElementById(id);
+      if (el) el.value = '';
     });
     document.getElementById('f-txn-type').value='';
     document.getElementById('f-category').value='';
@@ -522,84 +501,67 @@
 
     const isExact = document.getElementById('dup-title').textContent.includes('Exact');
     if (isExact && document.getElementById('dup-warning').style.display !== 'none') {
-      document.getElementById('form-error').textContent = 'Cannot create duplicate — client already exists.';
+      document.getElementById('form-error').textContent = 'Cannot create — client already exists.';
       return;
     }
     const confirmDup = document.getElementById('confirm-dup').checked;
 
-    // V2 Minimal Capture — identity only
-    const clientPayload = {
-      ClientName:       name,
-      PrimaryMobile:    mobile,
-      ClientStatus:     'New',
-      ClientLifecycle:  'Prospect',
-      confirmDuplicate: confirmDup
-    };
-
     try {
-      // Step 1: Create client via V2 API
       const clientRes = await fetch('/api/v2/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clientPayload)
+        body: JSON.stringify({ ClientName: name, PrimaryMobile: mobile, ClientStatus: 'New', ClientLifecycle: 'Prospect', confirmDuplicate: confirmDup })
       }).then(r => r.json());
 
       if (!clientRes.ok) {
-        if (clientRes.duplicateResult) {
-          document.getElementById('form-error').textContent = clientRes.error || 'Duplicate detected';
-        } else {
-          document.getElementById('form-error').textContent = clientRes.error || 'Failed to create client';
-        }
+        document.getElementById('form-error').textContent = clientRes.error || 'Failed to create client';
         return;
       }
 
       const leadId = clientRes.data?.LeadID;
 
-      // Step 2: If Transaction Type + Category provided, create initial need
+      // Optional: create initial requirement if type+category specified
       const txnType  = document.getElementById('f-txn-type').value;
       const category = document.getElementById('f-category').value;
       if (txnType && category && leadId) {
         try {
           const txnRes = await fetch(`/api/leads/${encodeURIComponent(leadId)}/transactions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ TransactionType: txnType, Status: 'Open' })
           }).then(r => r.json());
-
           if (txnRes.ok && txnRes.data?.TransactionID) {
             const location = document.getElementById('f-location').value.trim();
             const budget   = document.getElementById('f-budget').value.trim();
             await fetch(`/api/transactions/${encodeURIComponent(txnRes.data.TransactionID)}/requirements`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                LeadID:    leadId,
-                Category:  category,
-                Location1: location || undefined,
-                BudgetMax: budget   ? Number(budget) : undefined,
-                Status:    'Active'
-              })
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ LeadID: leadId, Category: category, Location1: location || undefined, BudgetMax: budget ? Number(budget) : undefined, Status: 'Active' })
             });
           }
-        } catch(_) { /* initial need creation failed — workspace will prompt */ }
+        } catch(_) {}
       }
 
-      // Step 3: Navigate to workspace
       closeModal();
       window.location.href = `/client-workspace?id=${enc(leadId)}`;
-
     } catch(e) {
       document.getElementById('form-error').textContent = 'Network error: ' + e.message;
     }
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-  const TAG_COLORS = { Investor:'tag-investor', VIP:'tag-vip', Hot:'tag-hot', Referral:'tag-referral', NRI:'tag-nri', Buyer:'tag-buyer', Seller:'tag-seller', Corporate:'tag-corporate' };
-  function tagBadge(t) { return `<span class="tag ${TAG_COLORS[t]||'tag-default'}">${esc(t)}</span>`; }
+  // ── Helpers ──────────────────────────────────────────────────────────────────
   function formatBudget(mn, mx) {
     const fmt = n => n==null?null : n>=1e7 ? `₹${(n/1e7).toFixed(1)}Cr` : n>=1e5 ? `₹${(n/1e5).toFixed(0)}L` : `₹${n.toLocaleString('en-IN')}`;
     const a=fmt(mn), b=fmt(mx);
     return [a,b].filter(Boolean).join(' – ') || '—';
+  }
+  function relativeDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso), now = new Date();
+    const diff = Math.floor((now - d) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff < 7)  return `${diff}d ago`;
+    if (diff < 30) return `${Math.floor(diff/7)}w ago`;
+    return d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
   }
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function enc(s) { return encodeURIComponent(s||''); }

@@ -4,13 +4,13 @@ const modules = [
   { key: 'workspace', label: 'Lead Workspace', icon: '◇', route: '/workspace' },
   { key: 'requirements', label: 'Requirements', icon: '◌', route: '/requirements' },
   { key: 'inventory', label: 'Inventory', icon: '▥', route: '/inventory' },
-  { key: 'matching', label: 'Matching Engine', icon: '✧', route: '/matching' },
+  { key: 'matching', label: 'Matching Engine', navLabel: 'Matching', icon: '✧', route: '/matching' },
   { key: 'shortlist', label: 'Shortlist', icon: '☍', route: '/shortlist' },
   { key: 'sitevisits', label: 'Site Visits', icon: '⌁', route: '/site-visits' },
   { key: 'negotiation', label: 'Negotiation', icon: '☄', route: '/negotiation' },
-  { key: 'dealcenter', label: 'Deal Center', icon: '◈', route: '/deal-center' },
+  { key: 'dealcenter', label: 'Deal Center', navLabel: 'Deals', icon: '◈', route: '/deal-center' },
   { key: 'commission', label: 'Commission', icon: '◍', route: '/commission' },
-  { key: 'followups', label: 'Follow-up Center', icon: '☎', route: '/followups' },
+  { key: 'followups', label: 'Follow-up Center', navLabel: 'Follow-ups', icon: '☎', route: '/followups' },
   { key: 'calendar', label: 'Calendar', icon: '◫', route: '/calendar' },
   { key: 'reports', label: 'Reports', icon: '▣', route: '/reports' },
   { key: 'broker', label: 'Broker Collaboration', icon: '☏', route: '/broker' },
@@ -62,39 +62,22 @@ const renderNavigation = () => {
   const nav = document.getElementById('app-navigation');
   nav.innerHTML = '';
 
-  // ── V2 Client Management section (hard-navigation pages) ─────────────────
-  const v2Section = document.createElement('div');
-  v2Section.className = 'nav-section-title';
-  v2Section.textContent = 'Client Management';
-  nav.appendChild(v2Section);
+  // Clients — hard navigation to V2 client page
+  const clientsLink = document.createElement('a');
+  clientsLink.href = '/clients';
+  clientsLink.className = 'nav-link' + (window.location.pathname.startsWith('/client') ? ' active' : '');
+  clientsLink.innerHTML = `<i>◉</i><span>Clients</span>`;
+  nav.appendChild(clientsLink);
 
-  const v2Pages = [
-    { label: 'Clients',           icon: '◉', href: '/clients' },
-    { label: 'Requirements View', icon: '◌', href: '/requirements-view' }
-  ];
-  v2Pages.forEach(({ label, icon, href }) => {
-    const link = document.createElement('a');
-    link.href  = href;
-    link.className = 'nav-link';
-    link.innerHTML = `<i>${icon}</i><span>${label}</span>`;
-    // highlight when on this page
-    if (window.location.pathname === href || window.location.pathname === href + '.html') {
-      link.classList.add('active');
-    }
-    nav.appendChild(link);
-  });
+  // Agent-facing module nav — only show relevant operational modules
+  const VISIBLE_KEYS = ['dashboard','inventory','matching','sitevisits','dealcenter','commission','followups','calendar','reports','settings'];
 
-  // ── Legacy V1 workspace ───────────────────────────────────────────────────
-  const navOverview = document.createElement('div');
-  navOverview.className = 'nav-section-title';
-  navOverview.textContent = 'Workspace';
-  nav.appendChild(navOverview);
-
-  modules.forEach((module, index) => {
+  modules.filter(m => VISIBLE_KEYS.includes(m.key)).forEach((module, index) => {
     const link = document.createElement('a');
     link.href = '#';
+    link.dataset.key = module.key;
     link.className = 'nav-link nav-module-link' + (index === 0 ? ' active' : '');
-    link.innerHTML = `<i>${module.icon}</i><span>${module.label}</span>`;
+    link.innerHTML = `<i>${module.icon}</i><span>${module.navLabel || module.label}</span>`;
     link.addEventListener('click', (event) => {
       event.preventDefault();
       renderModule(module.key);
@@ -131,10 +114,8 @@ function renderModule(key) {
   document.getElementById('page-title').textContent = module.label;
   document.getElementById('page-kicker').textContent = 'SIGNATURE PROPERTIES / ' + module.label.toUpperCase();
 
-  const navigationLinks = document.querySelectorAll('#app-navigation .nav-module-link');
-  navigationLinks.forEach((link, idx) => {
-    const desiredKey = modules[idx].key;
-    link.classList.toggle('active', desiredKey === key);
+  document.querySelectorAll('#app-navigation .nav-module-link').forEach(link => {
+    link.classList.toggle('active', link.dataset.key === key);
   });
 
   title();
