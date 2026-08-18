@@ -1210,29 +1210,57 @@
     } catch(e) { alert('Could not load score breakdown'); }
   }
 
-  // ── Open "Update Need" (same as add requirement but pre-filled) ───────────────
-  function openUpdateNeedModal(reqId) {
+  // ── Open "Update Requirement" (pre-filled) ────────────────────────────────────
+  async function openUpdateNeedModal(reqId) {
     const req = (workspace.requirements||[]).find(r => r.RequirementID === reqId);
     if (!req) return;
-    // Use the existing add-requirement modal pre-filled
     currentTxnId = req.TransactionID;
     document.getElementById('req-error').textContent = '';
     document.getElementById('dynamic-fields').innerHTML = '';
+
+    // Txn select
     const txns = workspace.transactions || [];
     const sel = document.getElementById('req-txn-id');
     sel.innerHTML = txns.map(t => `<option value="${enc(t.TransactionID)}" ${t.TransactionID===req.TransactionID?'selected':''}>${esc(t.TransactionType||t.Type||'—')}</option>`).join('');
-    document.getElementById('req-category').value    = req.Category   || '';
-    document.getElementById('req-budget-min').value  = req.BudgetMin  != null ? req.BudgetMin : '';
-    document.getElementById('req-budget-max').value  = req.BudgetMax  != null ? req.BudgetMax : '';
-    document.getElementById('req-location1').value   = req.Location1  || '';
-    document.getElementById('req-location2').value   = req.Location2  || '';
-    document.getElementById('req-urgency').value     = req.Urgency    || '';
-    document.getElementById('req-possession').value  = req.Possession || '';
-    document.getElementById('req-status').value      = req.RequirementStatus || req.Status || 'Active';
-    // Change modal title and save action to PATCH instead
+
+    // Category
+    document.getElementById('req-category').value = req.Category || '';
+
+    // Subcategory — rebuild options so loadFormConfig can read the value properly
+    const sub  = req.SubCategory || '';
+    const subs = SUBCATS[req.Category || ''] || [];
+    document.getElementById('req-subcategory').innerHTML =
+      `<option value="">Select…</option>` + subs.map(s => `<option ${s===sub?'selected':''}>${esc(s)}</option>`).join('');
+    document.getElementById('req-subcategory').value = sub;
+
+    // Core flat fields
+    document.getElementById('req-budget-min').value = req.BudgetMin  != null ? req.BudgetMin : '';
+    document.getElementById('req-budget-max').value = req.BudgetMax  != null ? req.BudgetMax : '';
+    document.getElementById('req-location1').value  = req.Location1  || '';
+    document.getElementById('req-location2').value  = req.Location2  || '';
+    document.getElementById('req-urgency').value    = req.Urgency    || '';
+    document.getElementById('req-possession').value = req.Possession || '';
+    document.getElementById('req-status').value     = req.RequirementStatus || req.Status || 'Active';
+
+    // Modal title / button
     document.querySelector('#req-modal .modal-title').textContent = 'Update Requirement';
     const saveBtn = document.querySelector('#req-modal .btn-primary[onclick="saveRequirement()"]');
     if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.onclick = () => saveRequirementPatch(reqId); }
+
+    // Load dynamic fields then pre-fill them from existing requirement
+    if (req.Category && sub) {
+      await loadFormConfig();
+      // Pre-fill dynamic fields: try flat req fields first, then Fields map
+      const fieldsMap = req.Fields || {};
+      document.querySelectorAll('[id^="dyn-"]').forEach(el => {
+        const key = el.id.replace('dyn-', '');
+        const val = req[key] ?? fieldsMap[key]?.value;
+        if (val !== undefined && val !== null) {
+          el.value = String(val);
+        }
+      });
+    }
+
     document.getElementById('req-modal').classList.remove('hidden');
   }
 
@@ -1619,24 +1647,37 @@
     try {
       const res = await fetch(`/api/v2/form-config?transactionType=${enc(txnType)}&category=${enc(cat)}&subCategory=${enc(sub)}`).then(r => r.json());
       if (!res.ok || !res.data) return;
-      const skipKeys = new Set(['BudgetMin','budgetMin','BudgetMax','budgetMax','Location1','location1','Location2','location2','Location3','location3','Possession','possession','Urgency','urgency']);
-      const fields = Object.values(res.data.fields||{}).filter(f => !skipKeys.has(f.fieldId) && f.active !== false).sort((a,b) => (a.displayOrder||99)-(b.displayOrder||99));
-      document.getElementById('dynamic-fields').innerHTML = fields.length ? `<div class="form-grid">${fields.map(f => renderDynField(f)).join('')}</div>` : '';
+      // API returns PascalCase: FieldKey, FieldLabel, FieldType, Options, Active, DisplayOrder
+      const skipKeys = new Set(['budgetMin','BudgetMin','budgetMax','BudgetMax',
+        'Location1','location1','Location2','location2','Location3','location3',
+        'Possession','possession','Urgency','urgency']);
+      const fields = (res.data.fields||[])
+        .filter(f => !skipKeys.has(f.FieldKey) && f.Active !== false)
+        .sort((a,b) => (a.DisplayOrder||99)-(b.DisplayOrder||99));
+      document.getElementById('dynamic-fields').innerHTML =
+        fields.length ? `<div class="form-grid">${fields.map(f => renderDynField(f)).join('')}</div>` : '';
     } catch(_) {}
   }
 
   function renderDynField(f) {
-    const id = `dyn-${f.fieldId}`;
+    // API uses PascalCase keys
+    const fk   = f.FieldKey;
+    const id   = `dyn-${fk}`;
+    const typ  = f.FieldType;
+    const lbl  = f.FieldLabel;
+    const opts = f.Options || [];
     let input = '';
-    if (f.fieldType === 'Select' && f.options)
-      input = `<select id="${esc(id)}"><option value="">—</option>${f.options.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
-    else if (f.fieldType === 'Boolean')
+    if ((typ === 'Select' || typ === 'MultiSelect') && opts.length)
+      input = `<select id="${esc(id)}"><option value="">—</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    else if (typ === 'Boolean')
       input = `<select id="${esc(id)}"><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select>`;
-    else if (f.fieldType === 'Number' || f.fieldType === 'Area')
-      input = `<input id="${esc(id)}" type="number" placeholder="${esc(f.fieldLabel)}" />`;
+    else if (typ === 'Number' || typ === 'Area')
+      input = `<input id="${esc(id)}" type="number" placeholder="${esc(lbl)}" />`;
+    else if (typ === 'Textarea')
+      input = `<textarea id="${esc(id)}" rows="2" placeholder="${esc(lbl)}"></textarea>`;
     else
-      input = `<input id="${esc(id)}" type="text" placeholder="${esc(f.fieldLabel)}" />`;
-    return `<div class="form-group"><label>${esc(f.fieldLabel)}</label>${input}</div>`;
+      input = `<input id="${esc(id)}" type="text" placeholder="${esc(lbl)}" />`;
+    return `<div class="form-group"><label>${esc(lbl)}</label>${input}</div>`;
   }
 
   async function saveRequirement() {

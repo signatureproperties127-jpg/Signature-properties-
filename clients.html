@@ -122,6 +122,10 @@
     .btn-cancel { background: #f3f4f6; color: var(--clr-text-light); border: 1px solid var(--clr-border); border-radius: 8px; padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
     .btn-cancel:hover { background: #e5e7eb; }
 
+    /* ── Dynamic fields grid ── */
+    .nc-dyn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 520px) { .nc-dyn-grid { grid-template-columns: 1fr; } }
+
     /* ── Dup warning ── */
     .dup-warning { background: var(--clr-yellow-soft); border: 1px solid #f59e0b; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
     .dup-warning-title { font-weight: 700; color: #92400e; margin-bottom: 6px; }
@@ -242,13 +246,13 @@
         </div>
       </div>
 
-      <!-- Initial Requirement (optional) -->
+      <!-- Initial Requirement — uses same dynamic form-config as workspace -->
       <div class="section-divider">
-        <div class="section-label">Initial Requirement <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional — add more from workspace)</span></div>
+        <div class="section-label">Initial Requirement</div>
         <div class="form-grid">
           <div class="form-group">
             <label>Transaction</label>
-            <select id="f-txn-type">
+            <select id="f-txn-type" onchange="ncOnTxnOrCatChange()">
               <option value="">— Not specified —</option>
               <option>Purchase</option>
               <option>Sale</option>
@@ -260,7 +264,7 @@
           </div>
           <div class="form-group">
             <label>Category</label>
-            <select id="f-category">
+            <select id="f-category" onchange="ncOnTxnOrCatChange()">
               <option value="">— Not specified —</option>
               <option>Residential</option>
               <option>Commercial</option>
@@ -269,15 +273,15 @@
               <option>Agriculture</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Location</label>
-            <input id="f-location" type="text" placeholder="e.g. Vesu, Surat" />
-          </div>
-          <div class="form-group">
-            <label>Budget (₹)</label>
-            <input id="f-budget" type="number" placeholder="e.g. 10000000" />
+          <div class="form-group full" id="f-subcategory-wrap" style="display:none">
+            <label>Sub Category</label>
+            <select id="f-subcategory" onchange="ncLoadFormConfig()">
+              <option value="">— Not sure yet —</option>
+            </select>
           </div>
         </div>
+        <!-- Dynamic requirement fields (BHK, Budget, Location, etc.) -->
+        <div id="nc-dynamic-fields" style="margin-top:12px"></div>
       </div>
       <div id="form-error" class="form-error"></div>
     </div>
@@ -478,17 +482,117 @@
     </div>`).join('');
   }
 
+  // ── Dynamic form-config engine (mirrors client-workspace.html) ───────────────
+  const NC_SUBCATS = {
+    Residential: ['Flat','Villa','Row House','Bungalow','Penthouse','Studio'],
+    Commercial:  ['Office','Shop','Showroom','Warehouse'],
+    Land:        ['Residential Plot','Commercial Plot','Agricultural Land'],
+    Industrial:  ['Factory','Warehouse'],
+    Agriculture: ['Farm Land','Agricultural Plot']
+  };
+
+  function ncOnTxnOrCatChange() {
+    const cat  = document.getElementById('f-category').value;
+    const wrap = document.getElementById('f-subcategory-wrap');
+    const dyn  = document.getElementById('nc-dynamic-fields');
+    const subs = NC_SUBCATS[cat] || [];
+    if (cat && subs.length) {
+      document.getElementById('f-subcategory').innerHTML =
+        '<option value="">— Not sure yet —</option>' + subs.map(s => `<option>${esc(s)}</option>`).join('');
+      wrap.style.display = '';
+    } else {
+      wrap.style.display = 'none';
+      document.getElementById('f-subcategory').value = '';
+    }
+    // Load form config immediately so Budget+Location appear even without SubCategory
+    ncLoadFormConfig();
+  }
+
+  async function ncLoadFormConfig() {
+    const txnType = document.getElementById('f-txn-type').value;
+    const cat     = document.getElementById('f-category').value;
+    const sub     = document.getElementById('f-subcategory').value || '';
+    const dyn     = document.getElementById('nc-dynamic-fields');
+
+    if (!txnType || !cat) { dyn.innerHTML = ''; return; }
+
+    try {
+      const url = `/api/v2/form-config?transactionType=${enc(txnType)}&category=${enc(cat)}${sub ? '&subCategory='+enc(sub) : ''}`;
+      const res = await fetch(url).then(r => r.json());
+      if (!res.ok || !res.data) { dyn.innerHTML = ncBasicFields(); return; }
+
+      // API uses PascalCase: FieldKey, FieldLabel, FieldType, Options, Active, DisplayOrder
+      const allFields = (res.data.fields || [])
+        .filter(f => f.Active !== false)
+        .sort((a,b) => (a.DisplayOrder||99) - (b.DisplayOrder||99));
+
+      const isBudgetMin = fk => ['budgetMin','BudgetMin'].includes(fk);
+      const isBudgetMax = fk => ['budgetMax','BudgetMax'].includes(fk);
+      const isLocation  = fk => ['Location1','Location2','Location3','location1','location2','location3'].includes(fk);
+
+      const hasBudgetMin = allFields.some(f => isBudgetMin(f.FieldKey));
+      const hasBudgetMax = allFields.some(f => isBudgetMax(f.FieldKey));
+      const otherFields  = allFields.filter(f => !isBudgetMin(f.FieldKey) && !isBudgetMax(f.FieldKey) && !isLocation(f.FieldKey));
+
+      let html = '<div class="nc-dyn-grid">';
+      if (hasBudgetMin && hasBudgetMax) {
+        html += `<div class="form-group"><label>Budget From (₹)</label><input id="nc-BudgetMin" type="number" placeholder="Min budget" /></div>`;
+        html += `<div class="form-group"><label>Budget To (₹)</label><input id="nc-BudgetMax" type="number" placeholder="Max budget" /></div>`;
+      } else {
+        html += `<div class="form-group"><label>Budget (₹)</label><input id="nc-BudgetMax" type="number" placeholder="e.g. 8000000" /></div>`;
+      }
+      html += `<div class="form-group"><label>Location</label><input id="nc-Location1" type="text" placeholder="e.g. Vesu, Surat" /></div>`;
+      html += otherFields.map(f => ncRenderDynField(f)).join('');
+      html += '</div>';
+      dyn.innerHTML = html;
+    } catch(e) {
+      dyn.innerHTML = ncBasicFields();
+    }
+  }
+
+  function ncBasicFields() {
+    return `<div class="nc-dyn-grid">
+      <div class="form-group"><label>Budget (₹)</label><input id="nc-BudgetMax" type="number" placeholder="e.g. 8000000" /></div>
+      <div class="form-group"><label>Location</label><input id="nc-Location1" type="text" placeholder="e.g. Vesu, Surat" /></div>
+    </div>`;
+  }
+
+  function ncRenderDynField(f) {
+    // API uses PascalCase keys
+    const fk   = f.FieldKey;
+    const id   = `nc-dyn-${fk}`;
+    const typ  = f.FieldType;
+    const lbl  = f.FieldLabel;
+    const opts = f.Options || [];
+    let input;
+    if ((typ === 'Select' || typ === 'MultiSelect') && opts.length)
+      input = `<select id="${esc(id)}"><option value="">—</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    else if (typ === 'Boolean')
+      input = `<select id="${esc(id)}"><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select>`;
+    else if (typ === 'Number' || typ === 'Area')
+      input = `<input id="${esc(id)}" type="number" placeholder="${esc(lbl)}" />`;
+    else if (typ === 'Textarea')
+      input = `<textarea id="${esc(id)}" rows="2" placeholder="${esc(lbl)}"></textarea>`;
+    else
+      input = `<input id="${esc(id)}" type="text" placeholder="${esc(lbl)}" />`;
+    return `<div class="form-group"><label>${esc(lbl)}</label>${input}</div>`;
+  }
+
+  function numOrNull(v) { const n=Number(v); return (v!==''&&v!=null&&!isNaN(n)&&v!==undefined)?n:null; }
+
   // ── Add Client Modal ─────────────────────────────────────────────────────────
   function openAddModal() {
     document.getElementById('add-modal').classList.remove('hidden');
     document.getElementById('dup-warning').style.display='none';
     document.getElementById('form-error').textContent='';
-    ['f-name','f-mobile','f-location','f-budget'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    document.getElementById('f-txn-type').value='';
-    document.getElementById('f-category').value='';
+    document.getElementById('f-name').value    = '';
+    document.getElementById('f-mobile').value  = '';
+    document.getElementById('f-txn-type').value = '';
+    document.getElementById('f-category').value = '';
+    document.getElementById('f-subcategory').value = '';
+    document.getElementById('f-subcategory-wrap').style.display = 'none';
+    document.getElementById('nc-dynamic-fields').innerHTML = '';
+    document.getElementById('confirm-dup').checked = false;
   }
 
   function closeModal() { document.getElementById('add-modal').classList.add('hidden'); }
@@ -520,21 +624,48 @@
 
       const leadId = clientRes.data?.LeadID;
 
-      // Optional: create initial requirement if type+category specified
+      // Create Transaction + Requirement if txnType + category filled
       const txnType  = document.getElementById('f-txn-type').value;
       const category = document.getElementById('f-category').value;
+
       if (txnType && category && leadId) {
         try {
           const txnRes = await fetch(`/api/leads/${encodeURIComponent(leadId)}/transactions`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ TransactionType: txnType, Status: 'Open' })
           }).then(r => r.json());
+
           if (txnRes.ok && txnRes.data?.TransactionID) {
-            const location = document.getElementById('f-location').value.trim();
-            const budget   = document.getElementById('f-budget').value.trim();
-            await fetch(`/api/transactions/${encodeURIComponent(txnRes.data.TransactionID)}/requirements`, {
+            const txnId = txnRes.data.TransactionID;
+
+            // Build requirement payload from dynamic fields
+            const reqPayload = {
+              LeadID: leadId, TransactionType: txnType, Category: category,
+              SubCategory: document.getElementById('f-subcategory')?.value || null,
+              RequirementStatus: 'Active'
+            };
+
+            // Budget
+            const bMin = numOrNull(document.getElementById('nc-BudgetMin')?.value);
+            const bMax = numOrNull(document.getElementById('nc-BudgetMax')?.value);
+            if (bMin != null) reqPayload.BudgetMin = bMin;
+            if (bMax != null) reqPayload.BudgetMax = bMax;
+
+            // Location
+            const loc = document.getElementById('nc-Location1')?.value?.trim();
+            if (loc) reqPayload.Location1 = loc;
+
+            // All other dynamic fields (BHK, Possession, Urgency, etc.)
+            document.querySelectorAll('[id^="nc-dyn-"]').forEach(el => {
+              const key = el.id.replace('nc-dyn-', '');
+              if (el.value && el.value !== '') {
+                reqPayload[key] = (el.type === 'number') ? Number(el.value) : el.value;
+              }
+            });
+
+            await fetch(`/api/transactions/${encodeURIComponent(txnId)}/requirements`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ LeadID: leadId, Category: category, Location1: location || undefined, BudgetMax: budget ? Number(budget) : undefined, Status: 'Active' })
+              body: JSON.stringify(reqPayload)
             });
           }
         } catch(_) {}
