@@ -248,6 +248,21 @@
     .req-meta { font-size: 11px; color: var(--clr-text-light); margin-top: 1px; }
     .req-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
+    /* ─── KPI STRIP ─────────────────────────────────────────────────── */
+    .kpi-strip { display: flex; gap: 10px; padding: 14px 24px; background: #fff; border-bottom: 1px solid var(--clr-border); flex-wrap: wrap; }
+    .kpi-card { flex: 1; min-width: 80px; background: var(--clr-gold-soft); border: 1px solid #e8d07a; border-radius: 10px; padding: 10px 12px; text-align: center; }
+    .kpi-value { font-size: 24px; font-weight: 800; color: var(--clr-primary); line-height: 1; }
+    .kpi-label { font-size: 9.5px; font-weight: 700; color: var(--clr-text-light); text-transform: uppercase; letter-spacing: .06em; margin-top: 5px; }
+
+    /* ─── SITE VISIT / DEAL CARDS ────────────────────────────────────── */
+    .sv-card { background: #fff; border: 1px solid var(--clr-border); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .sv-prop  { font-size: 13px; font-weight: 700; }
+    .sv-meta  { font-size: 11.5px; color: var(--clr-text-light); margin-top: 3px; }
+    .deal-card { background: #fff; border: 1px solid var(--clr-border); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+    .deal-id  { font-size: 13px; font-weight: 700; color: var(--clr-primary); }
+    .deal-meta { font-size: 11.5px; color: var(--clr-text-light); margin-top: 3px; }
+    .deal-commission { font-size: 12px; color: var(--clr-success); font-weight: 600; margin-top: 4px; }
+
     @media (max-width: 900px) {
       .workspace-body { grid-template-columns: 1fr; }
       .info-col { border-left: none; border-top: 1px solid var(--clr-border); order: -1; padding: 12px 16px; }
@@ -257,6 +272,7 @@
       .need-two-col { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
       .form-group.full { grid-column: 1; }
+      .kpi-card { min-width: 70px; }
     }
   </style>
 </head>
@@ -308,6 +324,17 @@
       <div class="client-meta-item" id="meta-agent">👤 —</div>
     </div>
     <div style="margin-top:8px" id="client-tags"></div>
+  </div>
+
+  <!-- ── KPI STRIP ─────────────────────────────────────────────────────── -->
+  <div class="kpi-strip" id="kpi-strip">
+    <div class="kpi-card"><div class="kpi-value" id="kpi-reqs">—</div><div class="kpi-label">Requirements</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-active">—</div><div class="kpi-label">Active</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-visits">—</div><div class="kpi-label">Site Visits</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-negs">—</div><div class="kpi-label">Negotiations</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-deals">—</div><div class="kpi-label">Deals</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-followups">—</div><div class="kpi-label">Follow-ups</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-score">—</div><div class="kpi-label">Client Score</div></div>
   </div>
 
   <!-- ── NEEDS-FIRST BODY ───────────────────────────────────────────────── -->
@@ -374,6 +401,8 @@
         <div class="tab" data-tab="activities">Activities</div>
         <div class="tab" data-tab="followups">Follow-ups</div>
         <div class="tab" data-tab="timeline">Timeline</div>
+        <div class="tab" data-tab="site-visits">Site Visits</div>
+        <div class="tab" data-tab="deals">Deals &amp; Commission</div>
       </div>
       <div class="tab-content">
         <div class="tab-pane active" id="tab-transactions">
@@ -396,6 +425,12 @@
         </div>
         <div class="tab-pane" id="tab-timeline">
           <div id="timeline-list">—</div>
+        </div>
+        <div class="tab-pane" id="tab-site-visits">
+          <div id="site-visits-list">—</div>
+        </div>
+        <div class="tab-pane" id="tab-deals">
+          <div id="deals-list">—</div>
         </div>
       </div>
     </div>
@@ -709,9 +744,33 @@
 
   async function loadWorkspace() {
     try {
-      const res = await fetch(`/api/clients/${encodeURIComponent(LEAD_ID)}/workspace`).then(r => r.json());
-      if (!res.ok) { showError(res.error || 'Client not found'); return; }
-      workspace = res.data;
+      // Fetch V2 workspace (requirements, activities, followUps, timeline)
+      // and legacy workspace (siteVisits, negotiations, deals, commissions) in parallel
+      const [v2Res, legacyRes] = await Promise.all([
+        fetch(`/api/clients/${encodeURIComponent(LEAD_ID)}/workspace`).then(r => r.json()),
+        fetch(`/api/leads/${encodeURIComponent(LEAD_ID)}/workspace`).then(r => r.json()).catch(() => ({ ok: false }))
+      ]);
+      if (!v2Res.ok) { showError(v2Res.error || 'Client not found'); return; }
+      workspace = v2Res.data;
+      // Merge extra collections from legacy workspace
+      if (legacyRes.ok && legacyRes.data) {
+        const leg = legacyRes.data;
+        workspace.siteVisits   = leg.siteVisits   || [];
+        workspace.negotiations = leg.negotiations  || [];
+        workspace.deals        = leg.deals         || [];
+        workspace.commissions  = leg.commissions   || [];
+        workspace.payments     = leg.payments      || [];
+        // Prefer legacy activities/followUps if V2 has none
+        if (!workspace.activities?.length  && leg.activities?.length)  workspace.activities  = leg.activities;
+        if (!workspace.followUps?.length   && leg.followUps?.length)   workspace.followUps   = leg.followUps;
+        if (!workspace.timeline?.length    && leg.timeline?.length)    workspace.timeline    = leg.timeline;
+      } else {
+        workspace.siteVisits   = workspace.siteVisits   || [];
+        workspace.negotiations = workspace.negotiations  || [];
+        workspace.deals        = workspace.deals         || [];
+        workspace.commissions  = workspace.commissions   || [];
+        workspace.payments     = workspace.payments      || [];
+      }
       renderAll();
       document.getElementById('workspace-loader').style.display = 'none';
       document.getElementById('workspace').style.display       = 'block';
@@ -754,6 +813,7 @@
     const tags = (lead.Tags||[]).map(t => `<span class="tag" style="background:#e0e7ff;color:#3730a3">${esc(t)}</span>`).join(' ');
     document.getElementById('client-tags').innerHTML = tags;
 
+    renderKpiStrip();
     renderNeedsFirst();
     renderSidebar();
     renderRecentActivity();
@@ -761,6 +821,31 @@
     renderActivities();
     renderFollowups();
     renderTimeline();
+    renderSiteVisitsTab();
+    renderDealsTab();
+  }
+
+  // ── KPI STRIP ─────────────────────────────────────────────────────────────────
+  function renderKpiStrip() {
+    const reqs  = workspace.requirements || [];
+    const fus   = workspace.followUps    || [];
+    const svs   = workspace.siteVisits   || [];
+    const negs  = workspace.negotiations || [];
+    const deals = workspace.deals        || [];
+    const lead  = workspace.lead;
+
+    const activeReqs  = reqs.filter(r => !['Lost','Closed','Archived'].includes(r.RequirementStatus||r.Status));
+    const openFollowups = fus.filter(f => f.Status !== 'Completed');
+    const openNegs    = negs.filter(n => !['Closed','Won','Lost'].includes(n.Status||n.NegotiationStatus));
+    const score       = typeof lead.ClientScore === 'object' ? lead.ClientScore?.total : lead.ClientScore;
+
+    document.getElementById('kpi-reqs').textContent    = reqs.length;
+    document.getElementById('kpi-active').textContent  = activeReqs.length;
+    document.getElementById('kpi-visits').textContent  = svs.length;
+    document.getElementById('kpi-negs').textContent    = openNegs.length;
+    document.getElementById('kpi-deals').textContent   = deals.length;
+    document.getElementById('kpi-followups').textContent = openFollowups.length;
+    document.getElementById('kpi-score').textContent   = score != null ? score : '—';
   }
 
   // ── REQUIREMENTS SECTION ─────────────────────────────────────────────────────
@@ -877,9 +962,11 @@
       </div>
 
       <div class="need-card-footer">
-        <button class="need-action-btn primary" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update Requirement</button>
+        <button class="need-action-btn primary" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update</button>
+        <button class="need-action-btn ghost"   onclick="openMatchingContext('${esc(reqId)}')">📊 Matching</button>
+        <button class="need-action-btn ghost"   onclick="openSiteVisitsContext('${esc(reqId)}')">🏠 Site Visits</button>
         <button class="need-action-btn ghost"   onclick="showNextQuestionsSection('${esc(reqId)}')">💬 Ask</button>
-        <button class="need-action-btn danger"  onclick="markLostReq('${esc(reqId)}')">✗ Mark Lost</button>
+        <button class="need-action-btn danger"  onclick="markLostReq('${esc(reqId)}')">✗ Lost</button>
       </div>
     </div>`;
   }
@@ -1418,12 +1505,21 @@
       rows.map(([l,v]) => `<div class="sidebar-row"><span class="sidebar-label">${esc(l)}</span><span class="sidebar-value" title="${esc(String(v))}">${esc(String(v||'—'))}</span></div>`).join('');
 
     // Summary
-    const s = ws.summary || {};
+    const s    = ws.summary || {};
+    const svs  = ws.siteVisits   || [];
+    const negs = ws.negotiations  || [];
+    const dels = ws.deals         || [];
+    const activeReqCount  = reqs.filter(r => !['Lost','Closed','Archived'].includes(r.RequirementStatus||r.Status)).length;
+    const openNegCount    = negs.filter(n => !['Closed','Won','Lost'].includes(n.Status||n.NegotiationStatus)).length;
+    const openFuCount     = (ws.followUps||[]).filter(f => f.Status !== 'Completed').length;
     document.getElementById('sidebar-summary').innerHTML = `
       <div class="sidebar-row"><span class="sidebar-label">Transactions</span><span class="sidebar-value" style="font-weight:700;color:var(--clr-primary)">${txns.length}</span></div>
       <div class="sidebar-row"><span class="sidebar-label">Requirements</span><span class="sidebar-value" style="font-weight:700;color:var(--clr-primary)">${reqs.length}</span></div>
-      <div class="sidebar-row"><span class="sidebar-label">Active Reqs</span><span class="sidebar-value">${s.activeRequirements||0}</span></div>
-      <div class="sidebar-row"><span class="sidebar-label">Open Follow-ups</span><span class="sidebar-value">${s.pendingFollowUps||0}</span></div>`;
+      <div class="sidebar-row"><span class="sidebar-label">Active Reqs</span><span class="sidebar-value">${activeReqCount}</span></div>
+      <div class="sidebar-row"><span class="sidebar-label">Site Visits</span><span class="sidebar-value">${svs.length}</span></div>
+      <div class="sidebar-row"><span class="sidebar-label">Open Negotiations</span><span class="sidebar-value">${openNegCount}</span></div>
+      <div class="sidebar-row"><span class="sidebar-label">Deals</span><span class="sidebar-value">${dels.length}</span></div>
+      <div class="sidebar-row"><span class="sidebar-label">Open Follow-ups</span><span class="sidebar-value">${openFuCount}</span></div>`;
 
     // Upcoming follow-ups
     const fus = (ws.followUps||[]).filter(f => f.Status !== 'Completed').slice(0, 4);
@@ -1759,6 +1855,113 @@
   function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
   // ── Tabs setup ────────────────────────────────────────────────────────────────
+  // ── Site Visits tab ───────────────────────────────────────────────────────────
+  function renderSiteVisitsTab() {
+    const svs  = workspace.siteVisits || [];
+    const reqs = workspace.requirements || [];
+    if (!svs.length) {
+      document.getElementById('site-visits-list').innerHTML =
+        '<div style="color:#64748b;font-size:13px;padding:20px 0">No site visits scheduled yet.</div>';
+      return;
+    }
+    const html = svs.map(sv => {
+      const req = reqs.find(r => r.RequirementID === sv.RequirementID);
+      const reqLabel = req ? `${req.Category||''}${req.SubCategory?' · '+req.SubCategory:''}` : sv.RequirementID || '';
+      const statusCls = sv.Status === 'Completed' ? 'background:#dcfce7;color:#166534'
+                      : sv.Status === 'Scheduled' ? 'background:#dbeafe;color:#1e40af'
+                      : sv.Status === 'Cancelled' ? 'background:#fee2e2;color:#991b1b'
+                      : 'background:#fef3c7;color:#92400e';
+      return `<div class="sv-card">
+        <div>
+          <div class="sv-prop">${esc(sv.PropertyID||sv.PropertyName||'Property')}</div>
+          <div class="sv-meta">
+            ${sv.RequirementID ? `<span style="font-size:11px;font-weight:600;color:var(--clr-primary)">${esc(sv.RequirementID)}</span>` : ''}
+            ${reqLabel ? ` · ${esc(reqLabel)}` : ''}
+            ${sv.VisitDate||sv.Date ? ` · 📅 ${esc(sv.VisitDate||sv.Date)}` : ''}
+            ${sv.VisitTime||sv.Time ? ` ${esc(sv.VisitTime||sv.Time)}` : ''}
+            ${sv.AssignedAgentID ? ` · 👤 ${esc(sv.AssignedAgentID)}` : ''}
+          </div>
+          ${sv.Feedback ? `<div style="font-size:11.5px;color:#64748b;margin-top:4px;font-style:italic">${esc(sv.Feedback)}</div>` : ''}
+        </div>
+        <span class="badge" style="${statusCls}">${esc(sv.Status||'Pending')}</span>
+      </div>`;
+    }).join('');
+    document.getElementById('site-visits-list').innerHTML = html;
+  }
+
+  // ── Deals & Commission tab ─────────────────────────────────────────────────────
+  function renderDealsTab() {
+    const deals = workspace.deals        || [];
+    const comms = workspace.commissions  || [];
+    const pays  = workspace.payments     || [];
+    if (!deals.length) {
+      document.getElementById('deals-list').innerHTML =
+        '<div style="color:#64748b;font-size:13px;padding:20px 0">No deals yet.</div>';
+      return;
+    }
+    const html = deals.map(d => {
+      const comm   = comms.find(c => c.DealID === d.DealID);
+      const dealPays = pays.filter(p => p.DealID === d.DealID);
+      const received = dealPays.reduce((sum,p) => sum + Number(p.Amount||0), 0);
+      const expected = comm ? Number(comm.ExpectedAmount||comm.BrokerageAmount||0) : 0;
+      const pending  = Math.max(0, expected - received);
+      const fmt = n => n >= 1e7 ? `₹${(n/1e7).toFixed(2)}Cr` : n >= 1e5 ? `₹${(n/1e5).toFixed(1)}L` : n > 0 ? `₹${n.toLocaleString('en-IN')}` : '—';
+      return `<div class="deal-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div>
+            <div class="deal-id">${esc(d.DealID)}</div>
+            <div class="deal-meta">
+              ${d.PropertyID ? `Property: ${esc(d.PropertyID)}` : ''}
+              ${d.RequirementID ? ` · ${esc(d.RequirementID)}` : ''}
+              ${d.FinalPrice ? ` · Deal Value: ${fmt(Number(d.FinalPrice))}` : ''}
+            </div>
+          </div>
+          <span class="badge badge-${(d.DealStatus||d.Status||'').toLowerCase()}">${esc(d.DealStatus||d.Status||'—')}</span>
+        </div>
+        ${expected || received ? `<div class="deal-commission">
+          Commission: Expected ${fmt(expected)} · Received ${fmt(received)} · Pending ${fmt(pending)}
+        </div>` : ''}
+      </div>`;
+    }).join('');
+    document.getElementById('deals-list').innerHTML = html;
+  }
+
+  // ── Matching & Site Visit context buttons ─────────────────────────────────────
+  function openMatchingContext(reqId) {
+    // Navigate to global matching module; store context for potential future filtering
+    try { sessionStorage.setItem('matchingContext', JSON.stringify({ leadId: LEAD_ID, reqId })); } catch(_) {}
+    window.location.href = '/?module=matching';
+  }
+
+  function openSiteVisitsContext(reqId) {
+    // Open the Site Visits tab in the details accordion and highlight req visits
+    const toggle = document.getElementById('details-toggle');
+    const inner  = document.getElementById('details-inner');
+    if (!inner.classList.contains('open')) {
+      inner.classList.add('open');
+      toggle.classList.add('open');
+    }
+    // Activate the site-visits tab
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    const svTab  = document.querySelector('.tab[data-tab="site-visits"]');
+    const svPane = document.getElementById('tab-site-visits');
+    if (svTab)  svTab.classList.add('active');
+    if (svPane) svPane.classList.add('active');
+    // Filter to show only visits for this requirement (highlight)
+    const svs = workspace.siteVisits || [];
+    const reqVisits = svs.filter(sv => sv.RequirementID === reqId);
+    if (!reqVisits.length) {
+      svPane.innerHTML = `<div style="color:#64748b;font-size:13px;padding:20px 0">
+        No site visits for ${esc(reqId)} yet.
+        <br><br><a href="/?module=site-visits" style="color:var(--clr-primary);font-weight:600">Schedule a Site Visit →</a>
+      </div>`;
+    } else {
+      renderSiteVisitsTab(); // full render (already filtered by lead)
+    }
+    svPane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function setupTabs() {
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
