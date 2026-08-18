@@ -1,0 +1,12 @@
+{
+  "runId": "amb-1-1787018745407",
+  "backupPath": "/home/runner/workspace/data/backups/sig-realty-db-backup-AMB1-1787018745407.json",
+  "sourceDbPath": "/tmp/sig-rollback-ggd4Nx/sig-realty-db.json",
+  "dbSizeBytes": 122,
+  "checksum": "sha256:581407884b064445123e6f797aff0361d4b99986d1713d5dbff9d82b6feebe9a",
+  "timestamp": "2026-08-18T02:05:45.407Z",
+  "migrationVersion": "18.0",
+  "environment": "production",
+  "hostname": "repl",
+  "context": "production-apply"
+}

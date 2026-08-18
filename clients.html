@@ -239,62 +239,53 @@
         </div>
       </div>
 
+      <!-- V2 Minimal Capture — Name + Phone + initial need (optional) -->
       <div class="form-grid">
         <div class="form-group full">
           <label>Client Name *</label>
           <input id="f-name" type="text" placeholder="Full name" />
         </div>
-        <div class="form-group">
+        <div class="form-group full">
           <label>Primary Mobile *</label>
           <input id="f-mobile" type="tel" placeholder="+91 98765 43210" onblur="checkDuplicate()" />
         </div>
-        <div class="form-group">
-          <label>Alternate Mobile</label>
-          <input id="f-alt-mobile" type="tel" placeholder="Alternate number" />
+      </div>
+
+      <div style="margin:16px 0 10px;border-top:1px solid #e2e8f0;padding-top:14px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:10px">
+          Initial Requirement <span style="font-weight:400;text-transform:none">(optional — add more from workspace)</span>
         </div>
-        <div class="form-group">
-          <label>WhatsApp</label>
-          <input id="f-whatsapp" type="tel" placeholder="WhatsApp number" />
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input id="f-email" type="email" placeholder="email@example.com" onblur="checkDuplicate()" />
-        </div>
-        <div class="form-group">
-          <label>City</label>
-          <input id="f-city" type="text" placeholder="City" />
-        </div>
-        <div class="form-group">
-          <label>Client Status</label>
-          <select id="f-status">
-            <option>New</option>
-            <option>Verified</option>
-            <option>Active</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Lifecycle</label>
-          <select id="f-lifecycle">
-            <option>Prospect</option>
-            <option>Client</option>
-            <option>Past Client</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Source</label>
-          <select id="f-source"></select>
-        </div>
-        <div class="form-group">
-          <label>Assigned Agent</label>
-          <input id="f-agent" type="text" placeholder="Agent ID" value="USR-0001" />
-        </div>
-        <div class="form-group full">
-          <label>Tags</label>
-          <div class="tag-picker" id="tag-picker"></div>
-        </div>
-        <div class="form-group full">
-          <label>Notes</label>
-          <textarea id="f-notes" rows="2" placeholder="Any notes about this client…"></textarea>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Transaction Type</label>
+            <select id="f-txn-type">
+              <option value="">— Not specified —</option>
+              <option>Purchase</option>
+              <option>Sale</option>
+              <option>Rent</option>
+              <option>Rent Out</option>
+              <option>Lease</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select id="f-category">
+              <option value="">— Not specified —</option>
+              <option>Residential</option>
+              <option>Commercial</option>
+              <option>Land</option>
+              <option>Industrial</option>
+              <option>Agriculture</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Location(s)</label>
+            <input id="f-location" type="text" placeholder="e.g. Vesu, Surat" />
+          </div>
+          <div class="form-group">
+            <label>Budget Max (₹)</label>
+            <input id="f-budget" type="number" placeholder="e.g. 10000000" />
+          </div>
         </div>
       </div>
       <div id="form-error" class="form-error"></div>
@@ -315,42 +306,26 @@
   let sortDir     = -1;
   let activeFilter = '';
   let searchQ      = '';
-  let selectedTags = new Set();
-  let searchTimer  = null;
-
-  const TAGS = ['Investor','Buyer','Seller','Tenant','Landlord','Builder','NRI','Corporate','VIP','Hot','Referral'];
-  const SOURCES = ['Walk-in','Phone Enquiry','Website','Social Media','Facebook Ads','Google Ads','Referral',
-    'Agent Referral','Builder Referral','Property Portal','99acres','MagicBricks','Housing.com',
-    'NoBroker','WhatsApp','SMS Campaign','Email Campaign','Exhibition','Newspaper Ad','Manual','Other'];
+  let searchTimer = null;
 
   // ── Init ────────────────────────────────────────────────────────────────────
   async function init() {
-    buildTagPicker();
-    buildSourceSelect();
     await loadClients();
     setupFilterChips();
   }
 
   async function loadClients() {
     try {
-      const [leadsRes, reqsRes] = await Promise.all([
-        fetch('/api/leads').then(r => r.json()),
-        fetch('/api/requirements').then(r => r.json())
-      ]);
-      const leads = leadsRes.data || [];
-      const reqs  = reqsRes.data || [];
+      // V2 endpoint returns enriched clients with _needSummaries embedded
+      const res = await fetch('/api/v2/clients').then(r => r.json());
+      const clients = res.data || [];
 
-      // Enrich with requirement summary
-      allClients = leads.map(lead => {
-        const leadReqs = reqs.filter(r => r.LeadID === lead.LeadID);
-        const latest   = leadReqs.sort((a,b) => new Date(b.UpdatedAt||b.CreatedAt) - new Date(a.UpdatedAt||a.CreatedAt))[0];
-        return {
-          ...lead,
-          _reqs: leadReqs,
-          _latestReq: latest,
-          _reqCount: leadReqs.length
-        };
-      });
+      allClients = clients.map(c => ({
+        ...c,
+        _reqs:     c._needSummaries || [],
+        _latestReq: (c._needSummaries||[])[0] || null,
+        _reqCount:  c._activeNeeds  || 0
+      }));
 
       updateStats();
       applyFilter();
@@ -439,7 +414,7 @@
       const budget    = latestReq ? formatBudget(latestReq.BudgetMin, latestReq.BudgetMax) : '—';
       const location  = latestReq ? (latestReq.Location1||'—') : '—';
       return `<tr>
-        <td><a class="client-link" href="/client-workspace.html?id=${enc(c.LeadID)}">${esc(c.ClientName||'—')}</a><br>
+        <td><a class="client-link" href="/client-workspace?id=${enc(c.LeadID)}">${esc(c.ClientName||'—')}</a><br>
           <span style="font-size:11px;color:#94a3b8">${esc(c.LeadID)}</span></td>
         <td>${esc(phone)}</td>
         <td><span class="badge badge-${status.toLowerCase()}">${esc(status)}</span></td>
@@ -491,7 +466,7 @@
     const email  = document.getElementById('f-email').value;
     if (!mobile && !email) return;
     try {
-      const res = await fetch('/api/leads/check-duplicate', {
+      const res = await fetch('/api/v2/clients/check-duplicate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ PrimaryMobile: mobile, Email: email, ClientName: document.getElementById('f-name').value })
@@ -521,7 +496,7 @@
   function renderCandidates(list) {
     return (list||[]).map(c => `<div class="dup-candidate">
       <strong>${esc(c.ClientName||'—')}</strong> &nbsp;•&nbsp; ${esc(c.MaskedMobile||'—')} &nbsp;•&nbsp; ${esc(c.MaskedEmail||'—')}
-      &nbsp;<a href="/client-workspace.html?id=${enc(c.LeadID)}" target="_blank" style="font-size:12px;color:#2563eb">View →</a>
+      &nbsp;<a href="/client-workspace?id=${enc(c.LeadID)}" target="_blank" style="font-size:12px;color:#2563eb">View →</a>
     </div>`).join('');
   }
 
@@ -530,13 +505,11 @@
     document.getElementById('add-modal').classList.remove('hidden');
     document.getElementById('dup-warning').style.display='none';
     document.getElementById('form-error').textContent='';
-    selectedTags.clear();
-    renderTagPicker();
-    ['f-name','f-mobile','f-alt-mobile','f-whatsapp','f-email','f-city','f-notes'].forEach(id => {
+    ['f-name','f-mobile','f-location','f-budget'].forEach(id => {
       document.getElementById(id).value='';
     });
-    document.getElementById('f-status').value='New';
-    document.getElementById('f-lifecycle').value='Prospect';
+    document.getElementById('f-txn-type').value='';
+    document.getElementById('f-category').value='';
   }
 
   function closeModal() { document.getElementById('add-modal').classList.add('hidden'); }
@@ -544,7 +517,7 @@
   async function submitClient() {
     const name   = document.getElementById('f-name').value.trim();
     const mobile = document.getElementById('f-mobile').value.trim();
-    if (!name) { document.getElementById('form-error').textContent = 'Client Name is required'; return; }
+    if (!name)   { document.getElementById('form-error').textContent = 'Client Name is required'; return; }
     if (!mobile) { document.getElementById('form-error').textContent = 'Primary Mobile is required'; return; }
 
     const isExact = document.getElementById('dup-title').textContent.includes('Exact');
@@ -554,38 +527,67 @@
     }
     const confirmDup = document.getElementById('confirm-dup').checked;
 
-    const payload = {
-      ClientName:    name,
-      PrimaryMobile: mobile,
-      AlternateMobile: document.getElementById('f-alt-mobile').value.trim()||null,
-      WhatsApp:      document.getElementById('f-whatsapp').value.trim()||null,
-      Email:         document.getElementById('f-email').value.trim()||null,
-      City:          document.getElementById('f-city').value.trim()||null,
-      ClientStatus:  document.getElementById('f-status').value,
-      ClientLifecycle: document.getElementById('f-lifecycle').value,
-      Source:        document.getElementById('f-source').value,
-      AssignedAgentID: document.getElementById('f-agent').value.trim()||'USR-0001',
-      Tags:          Array.from(selectedTags),
-      Notes:         document.getElementById('f-notes').value.trim()||'',
+    // V2 Minimal Capture — identity only
+    const clientPayload = {
+      ClientName:       name,
+      PrimaryMobile:    mobile,
+      ClientStatus:     'New',
+      ClientLifecycle:  'Prospect',
       confirmDuplicate: confirmDup
     };
 
     try {
-      const res = await fetch('/api/leads', {
+      // Step 1: Create client via V2 API
+      const clientRes = await fetch('/api/v2/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(clientPayload)
       }).then(r => r.json());
 
-      if (res.ok) {
-        closeModal();
-        window.location.href = `/client-workspace.html?id=${enc(res.data.LeadID)}`;
-      } else if (res.duplicateResult) {
-        // Show dup warning, already rendered
-        document.getElementById('form-error').textContent = res.error || 'Duplicate detected';
-      } else {
-        document.getElementById('form-error').textContent = res.error || 'Failed to create client';
+      if (!clientRes.ok) {
+        if (clientRes.duplicateResult) {
+          document.getElementById('form-error').textContent = clientRes.error || 'Duplicate detected';
+        } else {
+          document.getElementById('form-error').textContent = clientRes.error || 'Failed to create client';
+        }
+        return;
       }
+
+      const leadId = clientRes.data?.LeadID;
+
+      // Step 2: If Transaction Type + Category provided, create initial need
+      const txnType  = document.getElementById('f-txn-type').value;
+      const category = document.getElementById('f-category').value;
+      if (txnType && category && leadId) {
+        try {
+          const txnRes = await fetch(`/api/leads/${encodeURIComponent(leadId)}/transactions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ TransactionType: txnType, Status: 'Open' })
+          }).then(r => r.json());
+
+          if (txnRes.ok && txnRes.data?.TransactionID) {
+            const location = document.getElementById('f-location').value.trim();
+            const budget   = document.getElementById('f-budget').value.trim();
+            await fetch(`/api/transactions/${encodeURIComponent(txnRes.data.TransactionID)}/requirements`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                LeadID:    leadId,
+                Category:  category,
+                Location1: location || undefined,
+                BudgetMax: budget   ? Number(budget) : undefined,
+                Status:    'Active'
+              })
+            });
+          }
+        } catch(_) { /* initial need creation failed — workspace will prompt */ }
+      }
+
+      // Step 3: Navigate to workspace
+      closeModal();
+      window.location.href = `/client-workspace?id=${enc(leadId)}`;
+
     } catch(e) {
       document.getElementById('form-error').textContent = 'Network error: ' + e.message;
     }
@@ -601,23 +603,6 @@
   }
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function enc(s) { return encodeURIComponent(s||''); }
-
-  function buildTagPicker() {
-    const c = document.getElementById('tag-picker');
-    c.innerHTML = TAGS.map(t => `<button type="button" class="tag-opt" data-tag="${t}" onclick="toggleTag('${t}')">${t}</button>`).join('');
-  }
-  function renderTagPicker() {
-    document.querySelectorAll('.tag-opt').forEach(b => {
-      b.classList.toggle('selected', selectedTags.has(b.dataset.tag));
-    });
-  }
-  function toggleTag(t) { if(selectedTags.has(t)) selectedTags.delete(t); else selectedTags.add(t); renderTagPicker(); }
-
-  function buildSourceSelect() {
-    const sel = document.getElementById('f-source');
-    sel.innerHTML = SOURCES.map(s => `<option>${esc(s)}</option>`).join('');
-    sel.value = 'Manual';
-  }
 
   init();
 </script>

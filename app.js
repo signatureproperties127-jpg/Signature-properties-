@@ -62,6 +62,29 @@ const renderNavigation = () => {
   const nav = document.getElementById('app-navigation');
   nav.innerHTML = '';
 
+  // ── V2 Client Management section (hard-navigation pages) ─────────────────
+  const v2Section = document.createElement('div');
+  v2Section.className = 'nav-section-title';
+  v2Section.textContent = 'Client Management';
+  nav.appendChild(v2Section);
+
+  const v2Pages = [
+    { label: 'Clients',           icon: '◉', href: '/clients' },
+    { label: 'Requirements View', icon: '◌', href: '/requirements-view' }
+  ];
+  v2Pages.forEach(({ label, icon, href }) => {
+    const link = document.createElement('a');
+    link.href  = href;
+    link.className = 'nav-link';
+    link.innerHTML = `<i>${icon}</i><span>${label}</span>`;
+    // highlight when on this page
+    if (window.location.pathname === href || window.location.pathname === href + '.html') {
+      link.classList.add('active');
+    }
+    nav.appendChild(link);
+  });
+
+  // ── Legacy V1 workspace ───────────────────────────────────────────────────
   const navOverview = document.createElement('div');
   navOverview.className = 'nav-section-title';
   navOverview.textContent = 'Workspace';
