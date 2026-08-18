@@ -93,7 +93,7 @@ const renderNavigation = () => {
   modules.forEach((module, index) => {
     const link = document.createElement('a');
     link.href = '#';
-    link.className = 'nav-link' + (index === 0 ? ' active' : '');
+    link.className = 'nav-link nav-module-link' + (index === 0 ? ' active' : '');
     link.innerHTML = `<i>${module.icon}</i><span>${module.label}</span>`;
     link.addEventListener('click', (event) => {
       event.preventDefault();
@@ -131,7 +131,7 @@ function renderModule(key) {
   document.getElementById('page-title').textContent = module.label;
   document.getElementById('page-kicker').textContent = 'SIGNATURE PROPERTIES / ' + module.label.toUpperCase();
 
-  const navigationLinks = document.querySelectorAll('#app-navigation .nav-link');
+  const navigationLinks = document.querySelectorAll('#app-navigation .nav-module-link');
   navigationLinks.forEach((link, idx) => {
     const desiredKey = modules[idx].key;
     link.classList.toggle('active', desiredKey === key);
