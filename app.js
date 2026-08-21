@@ -8,7 +8,7 @@ const modules = [
   { key: 'shortlist', label: 'Shortlist', icon: '☍', route: '/shortlist' },
   { key: 'sitevisits', label: 'Site Visits', icon: '⌁', route: '/site-visits' },
   { key: 'negotiation', label: 'Negotiation', icon: '☄', route: '/negotiation' },
-  { key: 'dealcenter', label: 'Deal Center', navLabel: 'Deals', icon: '◈', route: '/deal-center' },
+  { key: 'dealcenter', label: 'Deal Center', icon: '◈', route: '/deal-center' },
   { key: 'commission', label: 'Commission', icon: '◍', route: '/commission' },
   { key: 'followups', label: 'Follow-up Center', navLabel: 'Follow-ups', icon: '☎', route: '/followups' },
   { key: 'calendar', label: 'Calendar', icon: '◫', route: '/calendar' },
@@ -70,7 +70,7 @@ const renderNavigation = () => {
   nav.appendChild(clientsLink);
 
   // Agent-facing module nav — only show relevant operational modules
-  const VISIBLE_KEYS = ['dashboard','inventory','matching','sitevisits','dealcenter','commission','followups','calendar','reports','settings'];
+  const VISIBLE_KEYS = ['leads','workspace','requirements','inventory','matching','shortlist','sitevisits','negotiation','dealcenter','commission','followups','calendar','reports','documents','admin','settings'];
 
   modules.filter(m => VISIBLE_KEYS.includes(m.key)).forEach((module, index) => {
     const link = document.createElement('a');
