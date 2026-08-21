@@ -1,5 +1,4 @@
 node_modules/
-package-lock.json
 
 # Runtime database backups and migration manifests are generated at run-time;
 # only the named fixtures committed below should be tracked.
