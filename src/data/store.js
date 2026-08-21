@@ -2,9 +2,9 @@ const { modelSchema, formRegistry } = require('./schema');
 
 const starterSeed = {
   users: [
-    { UserID: 'USR-0001', Name: 'System Admin', Mobile: '+910000000001', Role: 'ADMIN', Email: 'admin@sig.realty', Status: 'Active', Permissions: ['*'], CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' },
-    { UserID: 'USR-0002', Name: 'Team Manager', Mobile: '+910000000002', Role: 'MANAGER', Email: 'manager@sig.realty', Status: 'Active', Permissions: [], CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' },
-    { UserID: 'USR-0003', Name: 'Field Agent', Mobile: '+910000000003', Role: 'AGENT', Email: 'agent@sig.realty', Status: 'Active', Permissions: [], CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' }
+    { UserID: 'USR-0001', Name: 'System Admin', Mobile: '+910000000001', Role: 'ADMIN', Email: 'admin@sig.realty', Status: 'Active', Permissions: ['*'], CompanyID: 'COMP-001', BrokerageID: 'BRK-001', CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' },
+    { UserID: 'USR-0002', Name: 'Team Manager', Mobile: '+910000000002', Role: 'MANAGER', Email: 'manager@sig.realty', Status: 'Active', Permissions: [], CompanyID: 'COMP-001', BrokerageID: 'BRK-001', CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' },
+    { UserID: 'USR-0003', Name: 'Field Agent', Mobile: '+910000000003', Role: 'AGENT', Email: 'agent@sig.realty', Status: 'Active', Permissions: [], CompanyID: 'COMP-001', BrokerageID: 'BRK-001', CreatedAt: '2026-01-01', UpdatedAt: '2026-01-01', LastLoginAt: '2026-08-12T00:00:00.000Z' }
   ],
   leads: [
     {
@@ -55,8 +55,8 @@ const starterSeed = {
     SettingsID: 'SETTINGS-DEFAULT',
     Key: 'global',
     Value: {
-      CompanyName: 'Signature Realty',
-      ApplicationName: 'Signature Realty OS',
+      CompanyName: 'Signature Properties',
+      ApplicationName: 'Signature Properties',
       Timezone: 'Asia/Kolkata',
       DateFormat: 'YYYY-MM-DD',
       Currency: 'INR',

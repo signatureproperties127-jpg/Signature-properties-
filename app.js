@@ -35,11 +35,6 @@ const leads = [
   { name: 'Sana Khan', city: 'Hyderabad', phone: '+91 98102 91822', email: 'sana.k@example.com', status: 'Blacklisted', req: 0, lastActivity: '18 Mar 2026', agent: 'Asha Menon', source: 'Broker' }
 ];
 
-const ADMIN_SESSION = {
-  userId: 'USR-0001',
-  role: 'ADMIN'
-};
-
 const escapeHtml = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -50,12 +45,10 @@ const escapeHtml = (value) => String(value ?? '')
 async function adminRequest(url, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
-    'x-user-id': ADMIN_SESSION.userId,
-    'x-user-role': ADMIN_SESSION.role,
     ...(options.headers || {})
   };
 
-  return fetch(url, { ...options, headers });
+  return fetch(url, { ...options, headers, credentials: 'include' });
 }
 
 const renderNavigation = () => {

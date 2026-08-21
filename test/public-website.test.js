@@ -50,7 +50,7 @@ test('public website exposes public inventory and projects without auth', async 
     const publicHtml = await fetch(`${server.baseUrl}/public`);
     const html = await publicHtml.text();
     assert.equal(publicHtml.status, 200);
-    assert.match(html, /Signature Realty|Nexus Heights/i);
+    assert.match(html, /Signature Properties|Nexus Heights/i);
   } finally {
     await stopServer(server.child);
   }

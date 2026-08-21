@@ -1,13 +1,9 @@
 const { test, expect } = require('@playwright/test');
-
-const headers = {
-  'x-user-id': 'USR-ADMIN-1',
-  'x-user-role': 'ADMIN',
-  'x-company-id': 'COMP-UI',
-  'x-brokerage-id': 'BRK-UI'
-};
+const { applySession, createSessionToken } = require('./auth-session');
 
 test('media and documents workflow renders, previews, and respects visibility metadata', async ({ page, request }) => {
+  const token = await createSessionToken();
+  const headers = { 'x-session-token': token };
   await request.post('/api/media', {
     headers,
     data: {
@@ -76,6 +72,7 @@ test('media and documents workflow renders, previews, and respects visibility me
     }
   });
 
+  await applySession(page);
   await page.goto('/');
   await page.getByRole('link', { name: 'Documents' }).click();
 

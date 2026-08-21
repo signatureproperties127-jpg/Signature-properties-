@@ -1,8 +1,9 @@
 const { test, expect } = require('@playwright/test');
-
-const networkHeaders = { 'x-user-id': 'USR-0001', 'x-user-role': 'ADMIN' };
+const { applySession, createSessionToken } = require('./auth-session');
 
 test('broker network share page is private, responsive, and supports property attachment', async ({ page, request }) => {
+  const session = await createSessionToken();
+  const networkHeaders = { 'x-session-token': session };
   const property = await request.post('/api/inventory', {
     headers: networkHeaders,
     data: {
@@ -33,7 +34,7 @@ test('broker network share page is private, responsive, and supports property at
   const pageErrors = [];
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  await page.setExtraHTTPHeaders(networkHeaders);
+  await applySession(page);
 
   for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
     await page.setViewportSize(viewport);

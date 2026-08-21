@@ -4021,8 +4021,8 @@ class JsonRepository {
 
   getDefaultSettingsValue() {
     return {
-      CompanyName: 'Signature Realty',
-      ApplicationName: 'Signature Realty OS',
+      CompanyName: 'Signature Properties',
+      ApplicationName: 'Signature Properties',
       Timezone: 'Asia/Kolkata',
       DateFormat: 'YYYY-MM-DD',
       Currency: 'INR',

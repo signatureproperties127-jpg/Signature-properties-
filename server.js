@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 4173;
 const ROOT = __dirname;
 const runtime = new SignatureRealtyRuntime();
 // V2 Router shares the same repository instance as the runtime
-const v2Router = new V2Router(runtime.repository);
+const v2Router = new V2Router(runtime.repository, (req, url) => resolveSessionActor(req, url));
 const googleAuthService = new GoogleAuthService({ jwksUrl: process.env.GOOGLE_JWKS_URL });
 const activeSockets = new Set();
 let appServer;
@@ -41,12 +41,15 @@ function resolveSessionActor(req, url) {
 
 function getReportActor(req, url) {
   const sessionActor = resolveSessionActor(req, url);
-  if (sessionActor) {
-    return { role: sessionActor.role || 'AGENT', userId: sessionActor.userId || '' };
-  }
-  const role = req.headers['x-user-role'] || url.searchParams.get('role') || 'ADMIN';
-  const userId = req.headers['x-user-id'] || url.searchParams.get('userId') || url.searchParams.get('agentId') || '';
-  return { role, userId };
+  if (!sessionActor) return null;
+  return {
+    userId: sessionActor.userId || '',
+    role: sessionActor.role || 'AGENT',
+    companyId: sessionActor.companyId || '',
+    brokerageId: sessionActor.brokerageId || '',
+    permissions: Array.isArray(sessionActor.permissions) ? sessionActor.permissions : [],
+    user: sessionActor.user || null
+  };
 }
 
 function getReportFilters(url) {
@@ -69,42 +72,54 @@ function getReportFilters(url) {
 
 function getAdminActor(req) {
   const sessionActor = resolveSessionActor(req, new URL(req.url, `http://${req.headers.host}`));
-  if (sessionActor) {
-    return { role: sessionActor.role || '', userId: sessionActor.userId || '' };
-  }
+  if (!sessionActor) return null;
   return {
-    role: req.headers['x-user-role'] || '',
-    userId: req.headers['x-user-id'] || req.headers['x-userid'] || ''
+    userId: sessionActor.userId || '',
+    role: sessionActor.role || '',
+    companyId: sessionActor.companyId || '',
+    brokerageId: sessionActor.brokerageId || '',
+    permissions: Array.isArray(sessionActor.permissions) ? sessionActor.permissions : [],
+    user: sessionActor.user || null
   };
 }
 
 function getNetworkActor(req) {
   const sessionActor = resolveSessionActor(req, new URL(req.url, `http://${req.headers.host}`));
-  if (sessionActor) {
-    return { userId: sessionActor.userId || '', role: sessionActor.role || '' };
-  }
+  if (!sessionActor) return null;
   return {
-    userId: req.headers['x-user-id'] || req.headers['x-userid'] || '',
-    role: req.headers['x-user-role'] || ''
+    userId: sessionActor.userId || '',
+    role: sessionActor.role || '',
+    companyId: sessionActor.companyId || '',
+    brokerageId: sessionActor.brokerageId || '',
+    permissions: Array.isArray(sessionActor.permissions) ? sessionActor.permissions : [],
+    user: sessionActor.user || null
   };
 }
 
 function getAuthenticatedActor(req, url) {
   const sessionActor = resolveSessionActor(req, url || new URL(req.url, `http://${req.headers.host}`));
-  if (sessionActor) {
-    return {
-      userId: sessionActor.userId || '',
-      role: String(sessionActor.role || 'AGENT').trim().toUpperCase(),
-      companyId: sessionActor.companyId || '',
-      brokerageId: sessionActor.brokerageId || ''
-    };
-  }
+  if (!sessionActor) return null;
   return {
-    userId: req.headers['x-user-id'] || req.headers['x-userid'] || '',
-    role: String(req.headers['x-user-role'] || 'AGENT').trim().toUpperCase(),
-    companyId: req.headers['x-company-id'] || req.headers['x-companyid'] || '',
-    brokerageId: req.headers['x-brokerage-id'] || req.headers['x-brokerageid'] || ''
+    userId: sessionActor.userId || '',
+    role: String(sessionActor.role || 'AGENT').trim().toUpperCase(),
+    companyId: sessionActor.companyId || '',
+    brokerageId: sessionActor.brokerageId || '',
+    permissions: Array.isArray(sessionActor.permissions) ? sessionActor.permissions : [],
+    user: sessionActor.user || null
   };
+}
+
+function getAuthorizedReportActor(req, res, url, permission = 'REPORTS_VIEW') {
+  const actor = getReportActor(req, url);
+  if (!actor?.userId) {
+    sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+    return null;
+  }
+  if (permission && !runtime.repository.hasPermission(actor, permission)) {
+    sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+    return null;
+  }
+  return actor;
 }
 
 function buildSessionCookie(value, maxAgeSeconds = 3600) {
@@ -1079,7 +1094,7 @@ async function handleApi(req, res, url) {
     if (pathname === '/api/media' && req.method === 'POST') {
       const body = await readJson(req);
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1096,7 +1111,7 @@ async function handleApi(req, res, url) {
     if (pathname.startsWith('/api/media/')) {
       const mediaId = pathname.split('/').filter(Boolean)[2];
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1146,7 +1161,7 @@ async function handleApi(req, res, url) {
     const mediaEntityMatch = pathname.match(/^\/api\/(builders|projects|properties)\/([^/]+)\/media$/);
     if (mediaEntityMatch && req.method === 'GET') {
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1168,7 +1183,7 @@ async function handleApi(req, res, url) {
     if (pathname === '/api/documents' && req.method === 'POST') {
       const body = await readJson(req);
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1185,7 +1200,7 @@ async function handleApi(req, res, url) {
     if (pathname.startsWith('/api/documents/')) {
       const documentId = pathname.split('/').filter(Boolean)[2];
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1235,7 +1250,7 @@ async function handleApi(req, res, url) {
     const documentEntityMatch = pathname.match(/^\/api\/(builders|projects|properties)\/([^/]+)\/documents$/);
     if (documentEntityMatch && req.method === 'GET') {
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1256,7 +1271,7 @@ async function handleApi(req, res, url) {
 
     if (pathname === '/api/documents' && req.method === 'GET') {
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1268,7 +1283,7 @@ async function handleApi(req, res, url) {
 
     if (pathname === '/api/media' && req.method === 'GET') {
       const actor = getAuthenticatedActor(req, url);
-      if (!actor.userId) {
+      if (!actor?.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
       }
@@ -1485,110 +1500,145 @@ async function handleApi(req, res, url) {
 
     if (pathname === '/api/reports' && req.method === 'GET') {
       const filters = getReportFilters(url);
-      const actor = getReportActor(req, url);
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
       const payload = await runtime.getReportsCenter(filters, actor);
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/reports/dashboard' && req.method === 'GET') {
-      const payload = await runtime.getDashboardReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getDashboardReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/leads' && req.method === 'GET') {
-      const payload = await runtime.getLeadsReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getLeadsReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/requirements' && req.method === 'GET') {
-      const payload = await runtime.getRequirementsReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getRequirementsReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/inventory' && req.method === 'GET') {
-      const payload = await runtime.getInventoryReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getInventoryReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/matching' && req.method === 'GET') {
-      const payload = await runtime.getMatchingReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getMatchingReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/shortlist' && req.method === 'GET') {
-      const payload = await runtime.getShortlistReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getShortlistReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/site-visits' && req.method === 'GET') {
-      const payload = await runtime.getSiteVisitReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getSiteVisitReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/negotiations' && req.method === 'GET') {
-      const payload = await runtime.getNegotiationReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getNegotiationReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/tokens' && req.method === 'GET') {
-      const payload = await runtime.getTokenReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getTokenReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/deals' && req.method === 'GET') {
-      const payload = await runtime.getDealReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getDealReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/commission' && req.method === 'GET') {
-      const payload = await runtime.getCommissionReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getCommissionReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/closing' && req.method === 'GET') {
-      const payload = await runtime.getClosingReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getClosingReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/agents' && req.method === 'GET') {
-      const payload = await runtime.getAgentsReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getAgentsReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/sources' && req.method === 'GET') {
-      const payload = await runtime.getSourcesReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getSourcesReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/locations' && req.method === 'GET') {
-      const payload = await runtime.getLocationsReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getLocationsReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/builders' && req.method === 'GET') {
-      const payload = await runtime.getBuildersReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getBuildersReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/reports/financial' && req.method === 'GET') {
-      const payload = await runtime.getFinancialReport(getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url);
+      if (!actor) return;
+      const payload = await runtime.getFinancialReport(getReportFilters(url), actor);
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
@@ -1601,7 +1651,9 @@ async function handleApi(req, res, url) {
         return;
       }
 
-      const payload = await runtime.exportReportCsv(type, getReportFilters(url), getReportActor(req, url));
+      const actor = getAuthorizedReportActor(req, res, url, 'REPORTS_EXPORT');
+      if (!actor) return;
+      const payload = await runtime.exportReportCsv(type, getReportFilters(url), actor);
       if (!payload.ok) {
         sendJson(res, payload, 400);
         return;
@@ -1850,5 +1902,5 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 appServer.listen(PORT, () => {
-  console.log(`Signature Realty OS running at http://localhost:${PORT}`);
+  console.log(`Signature Properties running at http://localhost:${PORT}`);
 });

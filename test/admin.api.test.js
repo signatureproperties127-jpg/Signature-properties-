@@ -47,7 +47,7 @@ test('admin API enforces auth and exposes control endpoints', async () => {
 
     const settings = await requestJson(baseUrl, '/api/admin/settings', { headers: adminHeaders() });
     assert.equal(settings.response.status, 200);
-    assert.equal(settings.payload.data.CompanyName, 'Signature Realty');
+    assert.equal(settings.payload.data.CompanyName, 'Signature Properties');
 
     const backupsBefore = await requestJson(baseUrl, '/api/admin/backups', { headers: adminHeaders() });
     const backupCountBefore = backupsBefore.payload.data.length;

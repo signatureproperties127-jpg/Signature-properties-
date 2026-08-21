@@ -6,6 +6,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { once } = require('node:events');
 const { spawn } = require('node:child_process');
+const { adminHeaders, authenticateHeaders, requestJson, startServer: sharedStartServer, stopServer: sharedStopServer } = require('./admin-test-utils');
 
 function makeDbFile() {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-reporting-api-')), 'sig-realty-db.json');
@@ -240,63 +241,65 @@ async function createLifecycle(baseUrl, suffix = 'RPA01', opts = {}) {
 
 test('reporting API exposes dashboard and lead analytics with real filtered aggregates', async () => {
   const dbPath = makeDbFile();
-  const { child, baseUrl } = await startServer(dbPath);
+  const { child, baseUrl } = await sharedStartServer(dbPath);
 
   try {
     await createLifecycle(baseUrl, 'RPA11', { source: 'Manual', agentId: 'USR-7001' });
     await createLifecycle(baseUrl, 'RPA12', { source: 'Reference', agentId: 'USR-7002', city: 'Mumbai' });
 
-    const dashboardRes = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=thisyear`);
-    assert.equal(dashboardRes.status, 200);
-    const dashboard = await dashboardRes.json();
+    const dashboardRes = await requestJson(baseUrl, '/api/reports/dashboard?datePreset=thisyear', { headers: adminHeaders() });
+    assert.equal(dashboardRes.response.status, 200);
+    const dashboard = dashboardRes.payload;
     assert.equal(dashboard.ok, true);
     assert.equal(dashboard.data.executive.totalLeads >= 2, true);
     assert.equal(dashboard.data.pipeline.deal >= 2, true);
 
-    const leadsRes = await fetch(`${baseUrl}/api/reports/leads?datePreset=thisyear`);
-    assert.equal(leadsRes.status, 200);
-    const leads = await leadsRes.json();
+    const leadsRes = await requestJson(baseUrl, '/api/reports/leads?datePreset=thisyear', { headers: adminHeaders() });
+    assert.equal(leadsRes.response.status, 200);
+    const leads = leadsRes.payload;
     assert.equal(leads.ok, true);
     assert.equal(leads.data.sourceBreakdown.length >= 2, true);
 
-    const reportsRes = await fetch(`${baseUrl}/api/reports?datePreset=thisyear`);
-    assert.equal(reportsRes.status, 200);
-    const reports = await reportsRes.json();
+    const reportsRes = await requestJson(baseUrl, '/api/reports?datePreset=thisyear', { headers: adminHeaders() });
+    assert.equal(reportsRes.response.status, 200);
+    const reports = reportsRes.payload;
     assert.equal(reports.ok, true);
     assert.equal(Boolean(reports.data.dashboard), true);
     assert.equal(Boolean(reports.data.deals), true);
   } finally {
-    await stopServer(child);
+    await sharedStopServer(child);
     fs.unlinkSync(dbPath);
   }
 });
 
 test('reporting API validates date range, role scope, and CSV export', async () => {
   const dbPath = makeDbFile();
-  const { child, baseUrl } = await startServer(dbPath);
+  const { child, baseUrl } = await sharedStartServer(dbPath);
 
   try {
-    await createLifecycle(baseUrl, 'RPA21', { source: 'Instagram', agentId: 'USR-7101' });
-    await createLifecycle(baseUrl, 'RPA22', { source: 'Facebook', agentId: 'USR-7102' });
+    await createLifecycle(baseUrl, 'RPA21', { source: 'Instagram', agentId: 'USR-0003' });
+    await createLifecycle(baseUrl, 'RPA22', { source: 'Facebook', agentId: 'USR-0002' });
 
-    const invalidRange = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=custom&dateFrom=2026-12-31&dateTo=2026-01-01`);
-    assert.equal(invalidRange.status, 400);
+    const invalidRange = await requestJson(baseUrl, '/api/reports/dashboard?datePreset=custom&dateFrom=2026-12-31&dateTo=2026-01-01', { headers: adminHeaders() });
+    assert.equal(invalidRange.response.status, 400);
 
-    const scoped = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=thisyear`, {
-      headers: { 'x-user-role': 'AGENT', 'x-user-id': 'USR-7101' }
+    const scoped = await requestJson(baseUrl, '/api/reports/dashboard?datePreset=thisyear', {
+      headers: { 'x-user-role': 'AGENT', 'x-user-id': 'USR-0003' }
     });
-    assert.equal(scoped.status, 200);
-    const scopedPayload = await scoped.json();
+    assert.equal(scoped.response.status, 200);
+    const scopedPayload = scoped.payload;
     assert.equal(scopedPayload.ok, true);
     assert.equal(scopedPayload.data.executive.totalLeads, 1);
 
-    const csvRes = await fetch(`${baseUrl}/api/reports/export?type=deals&format=csv&datePreset=thisyear`);
+    const csvRes = await fetch(`${baseUrl}/api/reports/export?type=deals&format=csv&datePreset=thisyear`, {
+      headers: await authenticateHeaders(baseUrl, adminHeaders())
+    });
     assert.equal(csvRes.status, 200);
     assert.equal(csvRes.headers.get('content-type').includes('text/csv'), true);
     const csvBody = await csvRes.text();
     assert.equal(csvBody.startsWith('DealID,LeadID,PropertyID,FinalPrice,Brokerage,Status,AgreementDate,RegistrationDate,ClosingDate'), true);
   } finally {
-    await stopServer(child);
+    await sharedStopServer(child);
     fs.unlinkSync(dbPath);
   }
 });

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { makeDbFile, requestJson, startServer, stopServer } = require('./admin-test-utils');
+const { makeDbFile, requestJson, seedUsers, startServer, stopServer } = require('./admin-test-utils');
 
 function authHeaders(extra = {}) {
   return {
@@ -10,6 +10,16 @@ function authHeaders(extra = {}) {
     'x-brokerage-id': 'BRK-API',
     ...extra
   };
+}
+
+function seedMediaUsers(dbFile) {
+  seedUsers(dbFile, [
+    { UserID: 'USR-API-1', Name: 'API Agent', Email: 'api.agent@example.com', Mobile: '+91 9000001001', Role: 'AGENT', Status: 'Active', Permissions: ['MEDIA_READ', 'MEDIA_CREATE', 'MEDIA_DELETE', 'DOCUMENT_READ', 'DOCUMENT_CREATE', 'DOCUMENT_DELETE'], CompanyID: 'COMP-API', BrokerageID: 'BRK-API' },
+    { UserID: 'USR-PRIVATE-1', Name: 'Private Media Owner', Email: 'private.media.owner@example.com', Mobile: '+91 9000001002', Role: 'AGENT', Status: 'Active', Permissions: ['MEDIA_READ', 'MEDIA_CREATE', 'MEDIA_DELETE'], CompanyID: 'COMP-API', BrokerageID: 'BRK-API' },
+    { UserID: 'USR-OTHER-1', Name: 'Private Media Viewer', Email: 'private.media.viewer@example.com', Mobile: '+91 9000001003', Role: 'AGENT', Status: 'Active', Permissions: ['MEDIA_READ'], CompanyID: 'COMP-API', BrokerageID: 'BRK-API' },
+    { UserID: 'USR-DOC-PRIVATE', Name: 'Private Document Owner', Email: 'private.doc.owner@example.com', Mobile: '+91 9000001004', Role: 'AGENT', Status: 'Active', Permissions: ['DOCUMENT_READ', 'DOCUMENT_CREATE', 'DOCUMENT_DELETE'], CompanyID: 'COMP-API', BrokerageID: 'BRK-API' },
+    { UserID: 'USR-DOC-OTHER', Name: 'Private Document Viewer', Email: 'private.doc.viewer@example.com', Mobile: '+91 9000001005', Role: 'AGENT', Status: 'Active', Permissions: ['DOCUMENT_READ'], CompanyID: 'COMP-API', BrokerageID: 'BRK-API' }
+  ]);
 }
 
 function mediaPayload(overrides = {}) {
@@ -48,6 +58,7 @@ function documentPayload(overrides = {}) {
 
 test('create media via API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const response = await requestJson(baseUrl, '/api/media', {
@@ -67,6 +78,7 @@ test('create media via API', async () => {
 
 test('get media via API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const created = await requestJson(baseUrl, '/api/media', {
@@ -88,6 +100,7 @@ test('get media via API', async () => {
 
 test('delete/archive media via API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const created = await requestJson(baseUrl, '/api/media', {
@@ -109,6 +122,7 @@ test('delete/archive media via API', async () => {
 
 test('create document via API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const response = await requestJson(baseUrl, '/api/documents', {
@@ -127,6 +141,7 @@ test('create document via API', async () => {
 
 test('get document via API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const created = await requestJson(baseUrl, '/api/documents', {
@@ -148,6 +163,7 @@ test('get document via API', async () => {
 
 test('delete/archive document via API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const created = await requestJson(baseUrl, '/api/documents', {
@@ -169,6 +185,7 @@ test('delete/archive document via API', async () => {
 
 test('invalid visibility rejected by media API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const response = await requestJson(baseUrl, '/api/media', {
@@ -199,8 +216,9 @@ test('missing auth rejected', async () => {
   }
 });
 
-test('unauthorized tenant rejected for media', async () => {
+test('spoofed tenant headers are ignored for media', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const created = await requestJson(baseUrl, '/api/media', {
@@ -211,8 +229,9 @@ test('unauthorized tenant rejected for media', async () => {
     const response = await requestJson(baseUrl, `/api/media/${created.payload.data.MediaID}`, {
       headers: authHeaders({ 'x-company-id': 'COMP-API' })
     });
-    assert.equal(response.response.status, 403);
-    assert.equal(response.payload.ok, false);
+    assert.equal(response.response.status, 200);
+    assert.equal(response.payload.ok, true);
+    assert.equal(response.payload.data.Title, 'Foreign media');
   } finally {
     await stopServer(child);
   }
@@ -220,6 +239,7 @@ test('unauthorized tenant rejected for media', async () => {
 
 test('private media hidden from other user', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const created = await requestJson(baseUrl, '/api/media', {
@@ -239,6 +259,7 @@ test('private media hidden from other user', async () => {
 
 test('private document hidden from other user', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const created = await requestJson(baseUrl, '/api/documents', {
@@ -258,6 +279,7 @@ test('private document hidden from other user', async () => {
 
 test('invalid entity rejected by media API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const response = await requestJson(baseUrl, '/api/media', {
@@ -275,6 +297,7 @@ test('invalid entity rejected by media API', async () => {
 
 test('invalid MIME rejected by document API', async () => {
   const dbFile = makeDbFile();
+  seedMediaUsers(dbFile);
   const { child, baseUrl } = await startServer(dbFile);
   try {
     const response = await requestJson(baseUrl, '/api/documents', {
