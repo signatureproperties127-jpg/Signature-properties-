@@ -106,8 +106,10 @@ class V2Router {
         }
         if (method === 'POST') {
           const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+          if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+          const actor  = auth.actor;
           const result = this.txnSvc.createTransaction(leadId, body || {}, actor);
           return this._json(result.ok ? 201 : 400, result);
         }
@@ -126,8 +128,10 @@ class V2Router {
       if (sub === 'tags') {
         if (method === 'POST') {
           const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+          if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+          const actor  = auth.actor;
           const tag    = (body && (body.tag || body.Tag)) || null;
           if (!tag) return this._json(400, { ok: false, error: 'tag is required' });
           const result = this.leadSvc.addTag(leadId, tag, actor);
@@ -135,8 +139,10 @@ class V2Router {
         }
         if (method === 'DELETE' && subsub) {
           const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+          if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+          const actor  = auth.actor;
           const result = this.leadSvc.removeTag(leadId, subsub, actor);
           return this._json(result.ok ? 200 : 400, result);
         }
@@ -165,7 +171,9 @@ class V2Router {
       }
       if (method === 'POST') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.reqSvc.createRequirement(transactionId, body || {}, actor);
         return this._json(result.ok ? 201 : 400, result);
@@ -183,7 +191,9 @@ class V2Router {
       }
       if (method === 'PATCH') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.txnSvc.updateTransaction(txnId, body || {}, actor);
         return this._json(result.ok ? 200 : 404, result);
@@ -432,8 +442,10 @@ class V2Router {
     if (pathname === '/api/leads' && method === 'POST') {
       const allowPossible = (body && body.confirmDuplicate === true) || false;
       const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+      if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+      const actor  = auth.actor;
       const result = this.leadSvc.createLead(body || {}, actor, { allowPossibleDuplicate: allowPossible });
       if (!result.ok && result.duplicateResult) {
         return this._json(409, result);
@@ -452,7 +464,9 @@ class V2Router {
       }
       if (method === 'PATCH') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.leadSvc.updateLead(leadId, body || {}, actor);
         return this._json(result.ok ? 200 : 404, result);
@@ -483,7 +497,9 @@ class V2Router {
       }
       if (method === 'PATCH') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.reqSvc.updateRequirement(reqId, body || {}, actor);
         return this._json(result.ok ? 200 : 404, result);
@@ -526,8 +542,10 @@ class V2Router {
     if (pathname === '/api/v2/clients' && method === 'POST') {
       const allowPossible = !!(body && body.confirmDuplicate);
       const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+      if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+      const actor  = auth.actor;
       const result = this.leadSvc.createLead(body || {}, actor, { allowPossibleDuplicate: allowPossible });
       if (!result.ok && result.duplicateResult) return this._json(409, result);
       return this._json(result.ok ? 201 : 400, result);
@@ -552,8 +570,10 @@ class V2Router {
         }
         if (method === 'POST') {
           const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+          if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+          const actor  = auth.actor;
           const result = this.txnSvc.createTransaction(leadId, body || {}, actor);
           return this._json(result.ok ? 201 : 400, result);
         }
@@ -596,7 +616,9 @@ class V2Router {
       }
       if (method === 'PATCH') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.leadSvc.updateLead(leadId, body || {}, actor);
         return this._json(result.ok ? 200 : 404, result);
@@ -613,7 +635,9 @@ class V2Router {
       }
       if (method === 'POST') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.reqSvc.createRequirement(transactionId, body || {}, actor);
         return this._json(result.ok ? 201 : 400, result);
@@ -630,7 +654,9 @@ class V2Router {
       }
       if (method === 'PATCH') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.txnSvc.updateTransaction(txnId, body || {}, actor);
         return this._json(result.ok ? 200 : 404, result);
@@ -656,7 +682,9 @@ class V2Router {
       }
       if (method === 'PATCH') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.reqSvc.updateRequirement(reqId, body || {}, actor);
         return this._json(result.ok ? 200 : 404, result);
@@ -666,8 +694,10 @@ class V2Router {
     // ── Phase 16: Activity routes ─────────────────────────────────────────────
     if (pathname === '/api/v2/activities' && method === 'POST') {
       const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+      if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+      const actor  = auth.actor;
       const result = this.actSvc.createActivity(body || {}, actor);
       return this._json(result.ok ? 201 : 400, result);
     }
@@ -681,8 +711,10 @@ class V2Router {
     // ── Phase 16: Follow-up routes ────────────────────────────────────────────
     if (pathname === '/api/v2/followups' && method === 'POST') {
       const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+      if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+      const actor  = auth.actor;
       const result = this.fuSvc.createFollowUp(body || {}, actor);
       return this._json(result.ok ? 201 : 400, result);
     }
@@ -704,8 +736,10 @@ class V2Router {
     if (v2FuSubMatch && method === 'POST') {
       const [, fuId, action] = v2FuSubMatch;
       const auth = this._requireActor(req, url);
-        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const actor  = auth.actor;
+
+      if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
+      const actor  = auth.actor;
       const result = action === 'complete'
         ? this.fuSvc.completeFollowUp(fuId, actor)
         : this.fuSvc.cancelFollowUp(fuId, actor);
@@ -721,7 +755,9 @@ class V2Router {
       }
       if (method === 'PATCH') {
         const auth = this._requireActor(req, url);
+
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+
         const actor  = auth.actor;
         const result = this.fuSvc.updateFollowUp(fuId, body || {}, actor);
         return this._json(result.ok ? 200 : 400, result);

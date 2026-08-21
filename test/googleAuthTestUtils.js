@@ -25,6 +25,7 @@ async function startJwksServer(keys) {
     res.end();
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  server.unref();
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : null;
   return {

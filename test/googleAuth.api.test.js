@@ -1,42 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const http = require('node:http');
 const crypto = require('node:crypto');
 const { JsonRepository } = require('../src/data/repository');
 const { makeDbFile, requestJson, startServer, stopServer } = require('./admin-test-utils');
-
-function toBase64Url(value) {
-  return Buffer.from(value).toString('base64url');
-}
-
-function makeToken(privateKey, payload, kid = 'kid-1') {
-  const header = { alg: 'RS256', typ: 'JWT', kid };
-  const encodedHeader = toBase64Url(JSON.stringify(header));
-  const encodedPayload = toBase64Url(JSON.stringify(payload));
-  const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signature = crypto.sign('RSA-SHA256', Buffer.from(signingInput), privateKey).toString('base64url');
-  return `${signingInput}.${signature}`;
-}
-
-async function startJwksServer(keys) {
-  const server = http.createServer((req, res) => {
-    if (req.url === '/certs') {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' });
-      res.end(JSON.stringify({ keys }));
-      return;
-    }
-    res.writeHead(404);
-    res.end();
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  const port = typeof address === 'object' && address ? address.port : null;
-  return {
-    server,
-    url: `http://127.0.0.1:${port}/certs`,
-    stop: () => new Promise((resolve) => server.close(resolve))
-  };
-}
+const { makeToken, startJwksServer } = require('./googleAuthTestUtils');
 
 test('google auth API issues and revokes secure session cookie', async () => {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });

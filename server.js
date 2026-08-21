@@ -488,14 +488,24 @@ async function handleApi(req, res, url) {
     }
 
       if (pathname === '/api/broker-network/shares' && req.method === 'POST') {
+      const actor = getNetworkActor(req);
+      if (!actor?.userId) {
+        sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+        return;
+      }
       const body = await readJson(req);
-      const payload = runtime.brokerNetworkCreateShare(body, getNetworkActor(req));
+      const payload = runtime.brokerNetworkCreateShare(body, actor);
       sendJson(res, payload, 201);
       return;
     }
 
     if (pathname === '/api/broker-network/shares' && req.method === 'GET') {
-      sendJson(res, runtime.brokerNetworkListShares(getNetworkActor(req)));
+      const actor = getNetworkActor(req);
+      if (!actor?.userId) {
+        sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+        return;
+      }
+      sendJson(res, runtime.brokerNetworkListShares(actor));
       return;
     }
 
@@ -577,8 +587,13 @@ async function handleApi(req, res, url) {
       const parts = pathname.split('/').filter(Boolean);
       const token = parts[3];
       const body = await readJson(req);
-      const resolved = runtime.brokerNetworkResolveShare(token, { ...getNetworkActor(req), requireAuth: true });
-      const payload = runtime.brokerNetworkAttachProperty(resolved.share.SharedRequirementID, body.propertyId || body.PropertyID, body, getNetworkActor(req));
+      const actor = getNetworkActor(req);
+      if (!actor?.userId) {
+        sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+        return;
+      }
+      const resolved = runtime.brokerNetworkResolveShare(token, { ...actor, requireAuth: true });
+      const payload = runtime.brokerNetworkAttachProperty(resolved.share.SharedRequirementID, body.propertyId || body.PropertyID, body, actor);
       sendJson(res, payload, 201);
       return;
     }
@@ -589,6 +604,10 @@ async function handleApi(req, res, url) {
       const action = parts[4];
       const propertyId = parts[5];
       const actor = getNetworkActor(req);
+      if (!actor?.userId) {
+        sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+        return;
+      }
 
       if (req.method === 'GET' && !action) {
         sendJson(res, runtime.brokerNetworkGetShare(shareId, actor));

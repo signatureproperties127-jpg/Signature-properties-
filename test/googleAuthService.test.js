@@ -2,19 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { GoogleAuthService } = require('../src/services/googleAuthService');
-
-function toBase64Url(value) {
-  return Buffer.from(value).toString('base64url');
-}
-
-function makeToken(privateKey, payload, kid = 'kid-1') {
-  const header = { alg: 'RS256', typ: 'JWT', kid };
-  const encodedHeader = toBase64Url(JSON.stringify(header));
-  const encodedPayload = toBase64Url(JSON.stringify(payload));
-  const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signature = crypto.sign('RSA-SHA256', Buffer.from(signingInput), privateKey).toString('base64url');
-  return `${signingInput}.${signature}`;
-}
+const { makeToken } = require('./googleAuthTestUtils');
 
 function makeService(keys, now = Date.now()) {
   return new GoogleAuthService({
