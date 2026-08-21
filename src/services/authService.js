@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const SESSION_COOKIE_NAME = 'sig_session';
 
 const VALID_ROLES = new Set(['ADMIN', 'MANAGER', 'AGENT', 'BROKER', 'VIEWER']);
 const ALL_PERMISSIONS = [
@@ -168,6 +169,7 @@ class AuthService {
       return {
         authenticated: true,
         public: true,
+        sessionId: null,
         actorId: null,
         userId: null,
         role: 'PUBLIC',
@@ -180,10 +182,17 @@ class AuthService {
     }
 
     const authHeader = headers.authorization || headers.Authorization || '';
+    const cookieHeader = headers.cookie || headers.Cookie || '';
+    const cookieToken = String(cookieHeader)
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((entry) => entry.split('='))
+      .find(([name]) => name === SESSION_COOKIE_NAME)?.[1] || '';
     const tokenFromHeader = String(authHeader).startsWith('Bearer ')
       ? String(authHeader).replace(/^Bearer\s+/i, '').trim()
       : headers['x-session-token'] || headers['x-sessiontoken'] || '';
-    const token = tokenFromHeader || query.sessionToken || query.token || '';
+    const token = cookieToken || tokenFromHeader || query.sessionToken || query.token || '';
 
     if (!token) {
       return { authenticated: false, statusCode: 401, error: 'Unauthorized', public: false };
@@ -227,6 +236,7 @@ class AuthService {
     return {
       authenticated: true,
       public: false,
+      sessionId: token,
       actorId: user.UserID,
       userId: user.UserID,
       role,
@@ -287,6 +297,7 @@ class AuthService {
 
 module.exports = {
   AuthService,
+  SESSION_COOKIE_NAME,
   VALID_ROLES,
   ROLE_PERMISSIONS,
   ALL_PERMISSIONS

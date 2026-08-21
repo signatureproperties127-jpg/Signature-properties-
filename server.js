@@ -3,12 +3,15 @@ const fs = require('fs');
 const path = require('path');
 const { SignatureRealtyRuntime } = require('./src/runtime/app');
 const { V2Router } = require('./src/api/v2Router');
+const { SESSION_COOKIE_NAME } = require('./src/services/authService');
+const { GoogleAuthService } = require('./src/services/googleAuthService');
 
 const PORT = process.env.PORT || 4173;
 const ROOT = __dirname;
 const runtime = new SignatureRealtyRuntime();
 // V2 Router shares the same repository instance as the runtime
 const v2Router = new V2Router(runtime.repository);
+const googleAuthService = new GoogleAuthService({ jwksUrl: process.env.GOOGLE_JWKS_URL });
 const activeSockets = new Set();
 let appServer;
 let shutdownInProgress = false;
@@ -25,7 +28,22 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
+function resolveSessionActor(req, url) {
+  const query = {};
+  for (const [key, value] of url.searchParams.entries()) query[key] = value;
+  const resolved = runtime.resolveAuthenticatedActor({
+    headers: req.headers || {},
+    query,
+    pathname: url.pathname || ''
+  });
+  return resolved.ok ? resolved.actor : null;
+}
+
 function getReportActor(req, url) {
+  const sessionActor = resolveSessionActor(req, url);
+  if (sessionActor) {
+    return { role: sessionActor.role || 'AGENT', userId: sessionActor.userId || '' };
+  }
   const role = req.headers['x-user-role'] || url.searchParams.get('role') || 'ADMIN';
   const userId = req.headers['x-user-id'] || url.searchParams.get('userId') || url.searchParams.get('agentId') || '';
   return { role, userId };
@@ -50,6 +68,10 @@ function getReportFilters(url) {
 }
 
 function getAdminActor(req) {
+  const sessionActor = resolveSessionActor(req, new URL(req.url, `http://${req.headers.host}`));
+  if (sessionActor) {
+    return { role: sessionActor.role || '', userId: sessionActor.userId || '' };
+  }
   return {
     role: req.headers['x-user-role'] || '',
     userId: req.headers['x-user-id'] || req.headers['x-userid'] || ''
@@ -57,19 +79,41 @@ function getAdminActor(req) {
 }
 
 function getNetworkActor(req) {
+  const sessionActor = resolveSessionActor(req, new URL(req.url, `http://${req.headers.host}`));
+  if (sessionActor) {
+    return { userId: sessionActor.userId || '', role: sessionActor.role || '' };
+  }
   return {
     userId: req.headers['x-user-id'] || req.headers['x-userid'] || '',
     role: req.headers['x-user-role'] || ''
   };
 }
 
-function getAuthenticatedActor(req) {
+function getAuthenticatedActor(req, url) {
+  const sessionActor = resolveSessionActor(req, url || new URL(req.url, `http://${req.headers.host}`));
+  if (sessionActor) {
+    return {
+      userId: sessionActor.userId || '',
+      role: String(sessionActor.role || 'AGENT').trim().toUpperCase(),
+      companyId: sessionActor.companyId || '',
+      brokerageId: sessionActor.brokerageId || ''
+    };
+  }
   return {
     userId: req.headers['x-user-id'] || req.headers['x-userid'] || '',
     role: String(req.headers['x-user-role'] || 'AGENT').trim().toUpperCase(),
     companyId: req.headers['x-company-id'] || req.headers['x-companyid'] || '',
     brokerageId: req.headers['x-brokerage-id'] || req.headers['x-brokerageid'] || ''
   };
+}
+
+function buildSessionCookie(value, maxAgeSeconds = 3600) {
+  const encoded = encodeURIComponent(String(value || ''));
+  const base = [`${SESSION_COOKIE_NAME}=${encoded}`, 'Path=/', 'HttpOnly', 'Secure', 'SameSite=Lax', `Max-Age=${Math.max(0, Number(maxAgeSeconds) || 0)}`];
+  if ((Number(maxAgeSeconds) || 0) <= 0) {
+    base.push('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+  }
+  return base.join('; ');
 }
 
 function stripSensitiveMedia(row = {}) {
@@ -121,6 +165,79 @@ async function handleApi(req, res, url) {
       return;
     }
     // ── End V2 Router ─────────────────────────────────────────────────────────
+
+    if (pathname === '/api/auth/config' && req.method === 'GET') {
+      const clientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+      sendJson(res, { ok: true, data: { clientId: clientId || null } });
+      return;
+    }
+
+    if (pathname === '/api/auth/google' && req.method === 'POST') {
+      const clientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+      if (!clientId) {
+        sendJson(res, { ok: false, error: 'Google sign-in is not configured' }, 503);
+        return;
+      }
+
+      const body = await readJson(req);
+      const idToken = String(body.idToken || body.credential || '').trim();
+      if (!idToken) {
+        sendJson(res, { ok: false, error: 'Google ID token is required' }, 400);
+        return;
+      }
+
+      let googleIdentity;
+      try {
+        googleIdentity = await googleAuthService.verifyIdToken(idToken, clientId);
+      } catch (error) {
+        sendJson(res, { ok: false, error: error.message || 'Invalid Google sign-in' }, 401);
+        return;
+      }
+
+      const users = typeof runtime.repository.listUsers === 'function' ? runtime.repository.listUsers() : [];
+      const user = (users || []).find((candidate) =>
+        String(candidate?.Email || '').trim().toLowerCase() === googleIdentity.email
+      );
+      if (!user || String(user.Status || '').trim().toUpperCase() !== 'ACTIVE') {
+        sendJson(res, { ok: false, error: 'Unauthorized account' }, 403);
+        return;
+      }
+
+      const companyId = String(user.CompanyID || user.CompanyId || '').trim();
+      const brokerageId = String(user.BrokerageID || user.BrokerageId || '').trim();
+      if (!companyId || !brokerageId) {
+        sendJson(res, { ok: false, error: 'Tenant scope required' }, 403);
+        return;
+      }
+
+      const sessionId = runtime.auth.issueSession({
+        userId: user.UserID,
+        role: user.Role,
+        companyId,
+        brokerageId,
+        permissions: Array.isArray(user.Permissions) ? user.Permissions : []
+      });
+
+      sendJson(
+        res,
+        { ok: true, data: { userId: user.UserID, role: user.Role } },
+        200,
+        { 'Set-Cookie': buildSessionCookie(sessionId, 3600) }
+      );
+      return;
+    }
+
+    if (pathname === '/api/auth/logout' && req.method === 'POST') {
+      const context = runtime.auth.resolveRequestContext({
+        headers: req.headers || {},
+        pathname: pathname
+      });
+      if (context.authenticated && !context.public && context.sessionId) {
+        runtime.auth.revokeSession(context.sessionId);
+      }
+      sendJson(res, { ok: true }, 200, { 'Set-Cookie': buildSessionCookie('', 0) });
+      return;
+    }
 
       if (pathname === '/api/public/properties' && req.method === 'GET') {
       const payload = await runtime.listPublicProperties();
@@ -961,7 +1078,7 @@ async function handleApi(req, res, url) {
 
     if (pathname === '/api/media' && req.method === 'POST') {
       const body = await readJson(req);
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -978,7 +1095,7 @@ async function handleApi(req, res, url) {
 
     if (pathname.startsWith('/api/media/')) {
       const mediaId = pathname.split('/').filter(Boolean)[2];
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -1028,7 +1145,7 @@ async function handleApi(req, res, url) {
 
     const mediaEntityMatch = pathname.match(/^\/api\/(builders|projects|properties)\/([^/]+)\/media$/);
     if (mediaEntityMatch && req.method === 'GET') {
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -1050,7 +1167,7 @@ async function handleApi(req, res, url) {
 
     if (pathname === '/api/documents' && req.method === 'POST') {
       const body = await readJson(req);
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -1067,7 +1184,7 @@ async function handleApi(req, res, url) {
 
     if (pathname.startsWith('/api/documents/')) {
       const documentId = pathname.split('/').filter(Boolean)[2];
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -1117,7 +1234,7 @@ async function handleApi(req, res, url) {
 
     const documentEntityMatch = pathname.match(/^\/api\/(builders|projects|properties)\/([^/]+)\/documents$/);
     if (documentEntityMatch && req.method === 'GET') {
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -1138,7 +1255,7 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/documents' && req.method === 'GET') {
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -1150,7 +1267,7 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/media' && req.method === 'GET') {
-      const actor = getAuthenticatedActor(req);
+      const actor = getAuthenticatedActor(req, url);
       if (!actor.userId) {
         sendJson(res, { ok: false, statusCode: 401, error: 'Unauthorized' }, 401);
         return;
@@ -1545,10 +1662,11 @@ async function readJson(req) {
   });
 }
 
-function sendJson(res, payload, statusCode = 200) {
+function sendJson(res, payload, statusCode = 200, extraHeaders = {}) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store'
+    'Cache-Control': 'no-store',
+    ...extraHeaders
   });
   res.end(JSON.stringify(payload));
 }
