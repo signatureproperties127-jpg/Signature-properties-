@@ -183,12 +183,18 @@ class AuthService {
 
     const authHeader = headers.authorization || headers.Authorization || '';
     const cookieHeader = headers.cookie || headers.Cookie || '';
-    const cookieToken = String(cookieHeader)
+    const rawCookieToken = String(cookieHeader)
       .split(';')
       .map((part) => part.trim())
       .filter(Boolean)
       .map((entry) => entry.split('='))
       .find(([name]) => name === SESSION_COOKIE_NAME)?.[1] || '';
+    let cookieToken = rawCookieToken;
+    try {
+      cookieToken = decodeURIComponent(rawCookieToken);
+    } catch (_) {
+      cookieToken = rawCookieToken;
+    }
     const tokenFromHeader = String(authHeader).startsWith('Bearer ')
       ? String(authHeader).replace(/^Bearer\s+/i, '').trim()
       : headers['x-session-token'] || headers['x-sessiontoken'] || '';
