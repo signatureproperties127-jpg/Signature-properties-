@@ -4,8 +4,33 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Configure SSH
@@ -17,9 +42,12 @@ jobs:
           ssh-keyscan -p "${{ secrets.VM_SSH_PORT }}" -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy over SSH
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           ssh -i ~/.ssh/deploy_key -p "${{ secrets.VM_SSH_PORT }}" \
-            "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" bash -s <<'EOF'
+            "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" \
+            GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" bash -s <<'ENDSSH'
           set -euo pipefail
 
           cd ~/signature-properties
@@ -35,6 +63,42 @@ jobs:
             npm install --omit=dev
           fi
 
+          # Determine app user (the user running this script)
+          APP_USER="$(id -un)"
+          APP_HOME="$(pwd)"
+          NODE_BIN="$(command -v node)"
+
+          # Install systemd unit if missing or outdated
+          UNIT_FILE="/etc/systemd/system/signature-realty.service"
+          sudo tee "$UNIT_FILE" > /dev/null <<UNIT
+          [Unit]
+          Description=Signature Realty OS
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=$APP_USER
+          WorkingDirectory=$APP_HOME
+          ExecStart=$NODE_BIN server.js
+          Restart=on-failure
+          RestartSec=5
+          Environment=PORT=4173
+          EnvironmentFile=/etc/signature-realty/signature-realty.env
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+
+          # Write GOOGLE_CLIENT_ID to protected EnvironmentFile (never echoed to logs)
+          sudo mkdir -p /etc/signature-realty
+          sudo tee /etc/signature-realty/signature-realty.env > /dev/null <<ENVFILE
+          GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+          ENVFILE
+          sudo chmod 600 /etc/signature-realty/signature-realty.env
+          sudo chown root:root /etc/signature-realty/signature-realty.env
+
+          sudo systemctl daemon-reload
+          sudo systemctl enable signature-realty
           sudo systemctl restart signature-realty
 
           for i in $(seq 1 10); do
@@ -48,7 +112,7 @@ jobs:
             sleep 1
           done
           curl -f http://127.0.0.1:4173/api/dashboard
-          EOF
+          ENDSSH
 
       - name: Clean up SSH key
         if: always()
