@@ -267,12 +267,16 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/dashboard') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.dashboard();
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/leads' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
       const payload = await runtime.createLead(body);
       sendJson(res, payload);
@@ -280,12 +284,16 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/leads' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.leads();
       sendJson(res, payload);
       return;
     }
 
     if (pathname.startsWith('/api/leads/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const match = pathname.match(/^\/api\/leads\/([^/]+)(?:\/([^/]+))?$/);
 
       if (!match) {
@@ -374,12 +382,16 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/inventory' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.listInventory();
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/inventory' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
       const payload = await runtime.createInventoryProperty(body);
       sendJson(res, payload);
@@ -387,6 +399,8 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/requirements' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
       const payload = await runtime.createRequirement(body.leadId || body.LeadID, body.transactionId || body.TransactionID || 'TXN-0001', body);
       sendJson(res, payload);
@@ -394,6 +408,8 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname.startsWith('/api/requirements/') && pathname.endsWith('/matches')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const parts = pathname.split('/').filter(Boolean);
       const requirementId = parts[2];
       const payload = await runtime.getMatches(requirementId);
@@ -402,6 +418,8 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname.startsWith('/api/requirements/') && pathname.endsWith('/shortlist')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const parts = pathname.split('/').filter(Boolean);
       const requirementId = parts[2];
       const status = url.searchParams.get('status') || undefined;
@@ -411,6 +429,8 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname.startsWith('/api/requirements/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const match = pathname.match(/^\/api\/requirements\/([^/]+)(?:\/archive)?$/);
       if (!match) {
         sendJson(res, { ok: false, error: 'Bad requirements path' }, 400);
@@ -457,12 +477,16 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/requirements' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.requirements();
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/matching/run' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
       const requirementId = body.requirementId || body.requirementID;
       if (!requirementId) {
@@ -475,12 +499,16 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/matching') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.matching();
       sendJson(res, payload);
       return;
     }
 
     if (pathname.startsWith('/api/matches/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const matchId = pathname.split('/').pop();
       const payload = await runtime.getMatch(matchId);
       sendJson(res, payload);
