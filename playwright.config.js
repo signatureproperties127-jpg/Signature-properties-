@@ -5,7 +5,7 @@ module.exports = defineConfig({
   timeout: 15000,
   webServer: {
     command: 'node test/playwrightAuthServer.js',
-    url: 'http://127.0.0.1:4173/api/dashboard',
+    url: 'http://127.0.0.1:4173/api/auth/config',
     reuseExistingServer: false,
     timeout: 30000
   },
