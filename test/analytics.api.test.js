@@ -6,7 +6,6 @@ const path = require('node:path');
 const http = require('node:http');
 const { once } = require('node:events');
 const { spawn } = require('node:child_process');
-const { adminHeaders, authenticateHeaders, startServer: sharedStartServer, stopServer: sharedStopServer } = require('./admin-test-utils');
 
 function makeDbFile() {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-analytics-api-')), 'sig-realty-db.json');
@@ -204,7 +203,7 @@ async function seed(baseUrl) {
 
 test('analytics API endpoints return expected shapes and values', async () => {
   const dbPath = makeDbFile();
-  const { child, baseUrl } = await sharedStartServer(dbPath);
+  const { child, baseUrl } = await startServer(dbPath);
 
   try {
     await seed(baseUrl);
@@ -226,27 +225,26 @@ test('analytics API endpoints return expected shapes and values', async () => {
       '/api/reports/builders?datePreset=thisyear',
       '/api/reports/financial?datePreset=thisyear'
     ];
-    const headers = await authenticateHeaders(baseUrl, adminHeaders());
 
     for (const route of routes) {
-      const res = await fetch(`${baseUrl}${route}`, { headers });
+      const res = await fetch(`${baseUrl}${route}`);
       assert.equal(res.status, 200);
       const payload = await res.json();
       assert.equal(payload.ok, true, route);
       assert.equal(Boolean(payload.data), true, route);
     }
 
-    const commissionRes = await fetch(`${baseUrl}/api/reports/commission?datePreset=thisyear`, { headers });
+    const commissionRes = await fetch(`${baseUrl}/api/reports/commission?datePreset=thisyear`);
     const commission = await commissionRes.json();
     assert.equal(commission.data.grossCommission > 0, true);
     assert.equal(commission.data.received > 0, true);
 
-    const dealsRes = await fetch(`${baseUrl}/api/reports/deals?datePreset=thisyear`, { headers });
+    const dealsRes = await fetch(`${baseUrl}/api/reports/deals?datePreset=thisyear`);
     const deals = await dealsRes.json();
     assert.equal(deals.data.totalDeals >= 1, true);
     assert.equal(deals.data.financial.totalDealValue > 0, true);
   } finally {
-    await sharedStopServer(child);
+    await stopServer(child);
     fs.unlinkSync(dbPath);
   }
 });

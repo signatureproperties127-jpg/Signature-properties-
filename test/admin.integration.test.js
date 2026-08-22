@@ -88,7 +88,7 @@ test('admin integration flow survives a server restart with persisted data', asy
     assert.ok(roles.payload.data.some((entry) => entry.Name === 'COMPLIANCE'));
 
     const settings = await requestJson(server.baseUrl, '/api/admin/settings', { headers: adminHeaders() });
-    assert.equal(settings.payload.data.CompanyName, 'Signature Properties');
+    assert.equal(settings.payload.data.CompanyName, 'Signature Realty');
 
     const masters = await requestJson(server.baseUrl, '/api/admin/masters?masterType=LeadSources', { headers: adminHeaders() });
     assert.ok(masters.payload.data.some((entry) => entry.Value === 'Integration Referral'));

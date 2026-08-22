@@ -1,8 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
 async function inspectRequirementsPage(page) {
+  await page.locator('#app-navigation .nav-link').nth(3).click();
   await page.locator('#app-content').waitFor({ state: 'attached', timeout: 3000 });
-  await page.locator('#app-content .req-actions-row').first().waitFor({ state: 'attached', timeout: 5000 });
 
   const requirements = page.locator('#app-content .req-actions-row');
   const rows = await requirements.count();

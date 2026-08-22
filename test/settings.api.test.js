@@ -9,7 +9,7 @@ test('settings API persists admin configuration updates across restarts', async 
   try {
     const initial = await requestJson(server.baseUrl, '/api/admin/settings', { headers: adminHeaders() });
     assert.equal(initial.response.status, 200);
-    assert.equal(initial.payload.data.CompanyName, 'Signature Properties');
+    assert.equal(initial.payload.data.CompanyName, 'Signature Realty');
 
     const updated = await requestJson(server.baseUrl, '/api/admin/settings', {
       method: 'PATCH',

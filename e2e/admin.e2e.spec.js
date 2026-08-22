@@ -1,5 +1,4 @@
 const { test, expect } = require('@playwright/test');
-const { applySession, createSessionToken } = require('./auth-session');
 
 async function requestJson(request, method, route, data, headers = {}) {
   const response = await request.fetch(route, {
@@ -25,9 +24,9 @@ async function openAdminPanel(page) {
 }
 
 test('admin control center renders real data and supports persisted mutations', async ({ page }) => {
-  const token = await createSessionToken();
   const headers = {
-    'x-session-token': token
+    'x-user-id': 'USR-0001',
+    'x-user-role': 'ADMIN'
   };
 
   await requestJson(page.request, 'POST', '/api/admin/users', {
@@ -39,7 +38,6 @@ test('admin control center renders real data and supports persisted mutations', 
     Permissions: ['REPORTS_VIEW']
   }, headers);
 
-  await applySession(page);
   await page.goto('/', { waitUntil: 'load', timeout: 12000 });
   await openAdminPanel(page);
   await expect(page.locator('.admin-hero')).toBeVisible({ timeout: 10000 });
@@ -96,7 +94,6 @@ test('admin control center stays usable across mobile and tablet viewports', asy
       pageErrors.push(error.message);
     });
 
-    await applySession(page);
     await page.goto('/', { waitUntil: 'load', timeout: 12000 });
     await openAdminPanel(page);
 

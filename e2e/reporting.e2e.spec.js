@@ -1,22 +1,40 @@
 const { test, expect } = require('@playwright/test');
-const { applySession, createSessionToken } = require('./auth-session');
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
-const BASE_URL = 'http://127.0.0.1:4173';
+const BASE_URL = 'http://127.0.0.1:4183';
+const DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-reporting-browser-')), 'sig-realty-db.json');
+let browserServer;
 
 test.setTimeout(90000);
 
-async function requestJson(request, token, method, route, data) {
+async function waitForServer() {
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${BASE_URL}/api/dashboard`);
+      if (response.ok) return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+  throw new Error(`Reporting browser server did not start at ${BASE_URL}`);
+}
+
+async function requestJson(request, method, route, data) {
   const response = await request.fetch(`${BASE_URL}${route}`, {
     method,
     data,
-    headers: { 'Content-Type': 'application/json', 'x-session-token': token }
+    headers: { 'Content-Type': 'application/json' }
   });
   const payload = await response.json();
   return { response, payload };
 }
 
-async function createReportingFixture(request, token, suffix = 'RPE01') {
-  const lead = await requestJson(request, token, 'POST', '/api/leads', {
+async function createReportingFixture(request, suffix = 'RPE01') {
+  const lead = await requestJson(request, 'POST', '/api/leads', {
     clientName: `Reporting E2E Lead ${suffix}`,
     city: 'Bengaluru',
     phone: `+91 8666600${suffix}`,
@@ -27,7 +45,7 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
   });
   expect(lead.response.ok()).toBeTruthy();
 
-  const requirement = await requestJson(request, token, 'POST', '/api/requirements', {
+  const requirement = await requestJson(request, 'POST', '/api/requirements', {
     leadId: lead.payload.data.LeadID,
     transactionId: `TXN-RPE-${suffix}`,
     transactionType: 'Purchase',
@@ -49,7 +67,7 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
   });
   expect(requirement.response.ok()).toBeTruthy();
 
-  const property = await requestJson(request, token, 'POST', '/api/inventory', {
+  const property = await requestJson(request, 'POST', '/api/inventory', {
     transactionType: 'Sale',
     category: 'Residential',
     subCategory: 'Apartment',
@@ -66,14 +84,14 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
   });
   expect(property.response.ok()).toBeTruthy();
 
-  const matching = await requestJson(request, token, 'POST', '/api/matching/run', {
+  const matching = await requestJson(request, 'POST', '/api/matching/run', {
     requirementId: requirement.payload.data.RequirementID
   });
   expect(matching.response.ok()).toBeTruthy();
   const match = matching.payload.data.matches.find((item) => item.PropertyID === property.payload.data.PropertyID);
   expect(match).toBeTruthy();
 
-  const shortlist = await requestJson(request, token, 'POST', '/api/shortlist', {
+  const shortlist = await requestJson(request, 'POST', '/api/shortlist', {
     requirementId: requirement.payload.data.RequirementID,
     propertyId: property.payload.data.PropertyID,
     matchId: match.MatchID,
@@ -81,7 +99,7 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
   });
   expect(shortlist.response.ok()).toBeTruthy();
 
-  const siteVisit = await requestJson(request, token, 'POST', '/api/site-visits', {
+  const siteVisit = await requestJson(request, 'POST', '/api/site-visits', {
     leadId: lead.payload.data.LeadID,
     requirementId: requirement.payload.data.RequirementID,
     propertyId: property.payload.data.PropertyID,
@@ -93,7 +111,7 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
   });
   expect(siteVisit.response.ok()).toBeTruthy();
 
-  const negotiation = await requestJson(request, token, 'POST', '/api/negotiations', {
+  const negotiation = await requestJson(request, 'POST', '/api/negotiations', {
     LeadID: lead.payload.data.LeadID,
     RequirementID: requirement.payload.data.RequirementID,
     TransactionID: requirement.payload.data.TransactionID,
@@ -109,7 +127,7 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
   });
   expect(negotiation.response.ok()).toBeTruthy();
 
-  const tokenRecord = await requestJson(request, token, 'POST', '/api/tokens', {
+  const token = await requestJson(request, 'POST', '/api/tokens', {
     NegotiationID: negotiation.payload.data.NegotiationID,
     LeadID: lead.payload.data.LeadID,
     RequirementID: requirement.payload.data.RequirementID,
@@ -121,9 +139,9 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
     PendingAmount: 200000,
     Status: 'PARTIAL'
   });
-  expect(tokenRecord.response.ok()).toBeTruthy();
+  expect(token.response.ok()).toBeTruthy();
 
-  const deal = await requestJson(request, token, 'POST', '/api/deals', {
+  const deal = await requestJson(request, 'POST', '/api/deals', {
     LeadID: lead.payload.data.LeadID,
     RequirementID: requirement.payload.data.RequirementID,
     PropertyID: property.payload.data.PropertyID,
@@ -131,14 +149,14 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
     ShortlistID: shortlist.payload.data.ShortlistID,
     SiteVisitID: siteVisit.payload.data.VisitID,
     NegotiationID: negotiation.payload.data.NegotiationID,
-    TokenID: tokenRecord.payload.data.TokenID,
+    TokenID: token.payload.data.TokenID,
     FinalPrice: 15800000,
     Brokerage: 316000,
     Status: 'COMPLETED'
   });
   expect(deal.response.ok()).toBeTruthy();
 
-  const commission = await requestJson(request, token, 'POST', '/api/commission', {
+  const commission = await requestJson(request, 'POST', '/api/commission', {
     DealID: deal.payload.data.DealID,
     LeadID: lead.payload.data.LeadID,
     RequirementID: requirement.payload.data.RequirementID,
@@ -155,9 +173,26 @@ async function createReportingFixture(request, token, suffix = 'RPE01') {
   return { leadId: lead.payload.data.LeadID, commissionId: commission.payload.data.CommissionID };
 }
 
+test.beforeAll(async () => {
+  browserServer = spawn(process.execPath, ['server.js'], {
+    cwd: process.cwd(),
+    env: { ...process.env, PORT: '4183', SIG_REALTY_DB_FILE: DB_FILE },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  browserServer.stdout.setEncoding('utf8');
+  browserServer.stderr.setEncoding('utf8');
+  await waitForServer();
+});
+
+test.afterAll(async () => {
+  if (browserServer && !browserServer.killed) {
+    browserServer.kill('SIGTERM');
+  }
+});
+
 test('reporting center renders real analytics and filter/export actions using persisted data', async ({ page }) => {
-  const token = await createSessionToken();
-  await createReportingFixture(page.request, token, '801');
+  await createReportingFixture(page.request, '801');
 
   const consoleErrors = [];
   const pageErrors = [];
@@ -169,7 +204,6 @@ test('reporting center renders real analytics and filter/export actions using pe
     pageErrors.push(error.message);
   });
 
-  await applySession(page);
   await page.goto(BASE_URL, { waitUntil: 'load', timeout: 12000 });
   await page.locator('#app-navigation .nav-link', { hasText: 'Reports' }).click();
 
@@ -217,7 +251,6 @@ test('reporting center is responsive and usable on 360/390/768/1024 viewports', 
       pageErrors.push(error.message);
     });
 
-    await applySession(page);
     await page.goto(BASE_URL, { waitUntil: 'load', timeout: 12000 });
     await page.locator('#app-navigation .nav-link', { hasText: 'Reports' }).click();
 

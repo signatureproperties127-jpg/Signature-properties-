@@ -4021,8 +4021,8 @@ class JsonRepository {
 
   getDefaultSettingsValue() {
     return {
-      CompanyName: 'Signature Properties',
-      ApplicationName: 'Signature Properties',
+      CompanyName: 'Signature Realty',
+      ApplicationName: 'Signature Realty OS',
       Timezone: 'Asia/Kolkata',
       DateFormat: 'YYYY-MM-DD',
       Currency: 'INR',
@@ -4265,8 +4265,6 @@ class JsonRepository {
       Email: email,
       Status: status,
       Permissions: Array.from(new Set((payload.Permissions || payload.permissions || []).map((item) => String(item).trim()).filter(Boolean))),
-      CompanyID: String(payload.CompanyID || payload.companyId || payload.companyID || '').trim(),
-      BrokerageID: String(payload.BrokerageID || payload.brokerageId || payload.brokerageID || '').trim(),
       CreatedAt: payload.CreatedAt || new Date().toISOString(),
       UpdatedAt: payload.UpdatedAt || new Date().toISOString(),
       LastLoginAt: payload.LastLoginAt || null,
@@ -4304,8 +4302,6 @@ class JsonRepository {
       Role: String(payload.Role || payload.role || existing.Role || 'AGENT').trim().toUpperCase(),
       Status: payload.Status || payload.status || existing.Status,
       Permissions: payload.Permissions || payload.permissions ? Array.from(new Set((payload.Permissions || payload.permissions || []).map((item) => String(item).trim()).filter(Boolean))) : existing.Permissions || [],
-      CompanyID: String(payload.CompanyID || payload.companyId || payload.companyID || existing.CompanyID || '').trim(),
-      BrokerageID: String(payload.BrokerageID || payload.brokerageId || payload.brokerageID || existing.BrokerageID || '').trim(),
       LastLoginAt: payload.LastLoginAt || payload.lastLoginAt || existing.LastLoginAt || null,
       UpdatedAt: new Date().toISOString(),
       Notes: payload.Notes || payload.notes || existing.Notes || ''

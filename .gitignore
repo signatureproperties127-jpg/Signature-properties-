@@ -1,6 +1,5 @@
 node_modules/
+package-lock.json
 
-# Runtime database backups and migration manifests are generated at run-time;
-# only the named fixtures committed below should be tracked.
-data/backups/sig-realty-db-backup-*.json
-data/backups/migration-manifest-*.json
+# Production database lives outside the repo on the VM; never track live data.
+data/sig-realty-db.json

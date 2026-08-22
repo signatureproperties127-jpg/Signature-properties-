@@ -1,0 +1,65 @@
+{
+  "Leads": [
+    {
+      "LeadID": "LEAD-0001",
+      "ClientName": "Rahul Shah",
+      "Phone": "+91 98765 43210",
+      "Email": "rahul@test.com",
+      "LeadStatus": "Active",
+      "Lifecycle": "Client",
+      "CreatedAt": "2026-01-01T00:00:00.000Z",
+      "UpdatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "LeadID": "LEAD-0002",
+      "ClientName": "Priya Patel",
+      "Phone": "+91 98220 11888",
+      "Email": "priya@test.com",
+      "LeadStatus": "New",
+      "Lifecycle": "Prospect",
+      "CreatedAt": "2026-01-02T00:00:00.000Z",
+      "UpdatedAt": "2026-01-02T00:00:00.000Z"
+    }
+  ],
+  "Transactions": [
+    {
+      "TransactionID": "TXN-0001",
+      "LeadID": "LEAD-0001",
+      "TransactionType": "Purchase",
+      "Status": "Open",
+      "CreatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "Requirements": [
+    {
+      "RequirementID": "REQ-0001",
+      "LeadID": "LEAD-0001",
+      "TransactionID": "TXN-0001",
+      "Category": "Residential",
+      "SubCategory": "Flat",
+      "BudgetMax": 10000000,
+      "Location1": "Vesu",
+      "Fields": {
+        "BudgetMax": {
+          "state": "KNOWN",
+          "value": 10000000
+        }
+      },
+      "CreatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "Activities": [],
+  "FollowUps": [],
+  "Timeline": [],
+  "Inventory": [],
+  "Matches": [],
+  "Deals": [],
+  "Users": [],
+  "Roles": [],
+  "MigrationMap": [],
+  "_V2Counters": {
+    "Lead": 0,
+    "Transaction": 0,
+    "Requirement": 0
+  }
+}
