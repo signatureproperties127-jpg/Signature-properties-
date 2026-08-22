@@ -71,3 +71,26 @@ test('google auth API issues and revokes secure session cookie', async () => {
     await jwks.stop();
   }
 });
+
+test('google auth config endpoint returns 503 when client id is missing', async () => {
+  const dbFile = makeDbFile();
+  const { child, baseUrl } = await startServer(dbFile, {
+    env: {
+      GOOGLE_CLIENT_ID: ''
+    }
+  });
+
+  try {
+    const config = await requestJson(baseUrl, '/api/auth/config');
+    assert.equal(config.response.status, 503);
+    assert.equal(config.payload.ok, false);
+    assert.equal(config.payload.error, 'Google sign-in is not configured');
+
+    const configSlash = await requestJson(baseUrl, '/api/auth/config/');
+    assert.equal(configSlash.response.status, 503);
+    assert.equal(configSlash.payload.ok, false);
+    assert.equal(configSlash.payload.error, 'Google sign-in is not configured');
+  } finally {
+    await stopServer(child);
+  }
+});

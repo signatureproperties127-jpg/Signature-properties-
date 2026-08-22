@@ -164,6 +164,8 @@ async function readJsonOnce(req) {
 
 async function handleApi(req, res, url) {
   const pathname = url.pathname;
+  const isAuthConfigPath = /^\/api\/auth\/config\/?$/i.test(pathname);
+  const isAuthGooglePath = /^\/api\/auth\/google\/?$/i.test(pathname);
 
   try {
     // ── V2 Router — handled FIRST for V2-specific and enhanced routes ────────
@@ -181,13 +183,17 @@ async function handleApi(req, res, url) {
     }
     // ── End V2 Router ─────────────────────────────────────────────────────────
 
-    if (pathname === '/api/auth/config' && req.method === 'GET') {
+    if (isAuthConfigPath && req.method === 'GET') {
       const clientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
-      sendJson(res, { ok: true, data: { clientId: clientId || null } });
+      if (!clientId) {
+        sendJson(res, { ok: false, error: 'Google sign-in is not configured' }, 503);
+        return;
+      }
+      sendJson(res, { ok: true, data: { clientId } });
       return;
     }
 
-    if (pathname === '/api/auth/google' && req.method === 'POST') {
+    if (isAuthGooglePath && req.method === 'POST') {
       const clientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
       if (!clientId) {
         sendJson(res, { ok: false, error: 'Google sign-in is not configured' }, 503);

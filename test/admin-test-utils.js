@@ -84,7 +84,7 @@ async function startServer(dbFile, options = {}) {
   while (Date.now() < deadline) {
     if (child.exitCode !== null) break;
     try {
-      const response = await fetch(`${baseUrl}/api/dashboard`);
+      const response = await fetch(`${baseUrl}/api/public/properties`);
       if (response.ok) {
         serverAuthContexts.set(baseUrl, { ...authHarness, dbFile, cookies: new Map() });
         return { child, baseUrl, port };
