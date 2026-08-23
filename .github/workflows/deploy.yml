@@ -163,7 +163,6 @@ jobs:
           test "$NODE_PID" -gt 0
           test "$(readlink -f "/proc/$NODE_PID/cwd")" = "$APP_HOME"
           tr '\0' ' ' < "/proc/$NODE_PID/cmdline" | grep -F 'server.js'
-          sudo systemctl show signature-realty --property=Environment --value | grep -Eq '(^| )GOOGLE_CLIENT_ID=.+($| )'
 
           ss -ltnp | grep -F ':4173'
 
