@@ -1,10 +1,20 @@
 const { test, expect } = require('@playwright/test');
 
-const networkHeaders = { 'x-user-id': 'USR-0001', 'x-user-role': 'ADMIN' };
+let sessionHeaders = {};
+
+test.beforeAll(async ({ request }) => {
+  const secret = process.env.SIG_REALTY_TEST_SESSION_TOKEN || 'pw-e2e-secret';
+  const resp = await request.post('/api/auth/test-session', {
+    data: { secret, userId: 'USR-0001' }
+  });
+  const body = await resp.json();
+  if (!resp.ok() || !body.data?.token) throw new Error(`test-session failed: ${JSON.stringify(body)}`);
+  sessionHeaders = { 'x-session-token': body.data.token };
+});
 
 test('broker network share page is private, responsive, and supports property attachment', async ({ page, request }) => {
   const property = await request.post('/api/inventory', {
-    headers: networkHeaders,
+    headers: sessionHeaders,
     data: {
       PropertyID: 'PROP-NETWORK-E2E',
       Category: 'Residential',
@@ -21,7 +31,7 @@ test('broker network share page is private, responsive, and supports property at
   expect(property.ok()).toBeTruthy();
 
   const created = await request.post('/api/broker-network/shares', {
-    headers: networkHeaders,
+    headers: sessionHeaders,
     data: { requirementId: 'REQ-0001', expiry: '7d' }
   });
   expect(created.status()).toBe(201);
@@ -33,7 +43,7 @@ test('broker network share page is private, responsive, and supports property at
   const pageErrors = [];
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  await page.setExtraHTTPHeaders(networkHeaders);
+  await page.setExtraHTTPHeaders(sessionHeaders);
 
   for (const viewport of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1024, height: 768 }]) {
     await page.setViewportSize(viewport);

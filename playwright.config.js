@@ -4,7 +4,7 @@ module.exports = defineConfig({
   testDir: './e2e',
   timeout: 15000,
   webServer: {
-    command: 'TMP_DIR=$(mktemp -d) && PORT=4173 SIG_REALTY_DB_FILE="$TMP_DIR/sig-realty-db.json" node server.js',
+    command: 'TMP_DIR=$(mktemp -d) && PORT=4173 NODE_ENV=test SIG_REALTY_TEST_SESSION_TOKEN="${SIG_REALTY_TEST_SESSION_TOKEN:-pw-e2e-secret}" SIG_REALTY_DB_FILE="$TMP_DIR/sig-realty-db.json" node server.js',
     url: 'http://127.0.0.1:4173/api/dashboard',
     reuseExistingServer: false,
     timeout: 30000

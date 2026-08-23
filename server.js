@@ -9,6 +9,7 @@ const { GoogleAuthService } = require('./src/services/googleAuthService');
 const PORT = process.env.PORT || 4173;
 const ROOT = __dirname;
 const runtime = new SignatureRealtyRuntime();
+const TEST_SESSION_FIXTURE_USER_ID = 'USR-0001';
 // V2 Router shares the same repository instance as the runtime
 const v2Router = new V2Router(runtime.repository, (req, url) => resolveSessionActor(req, url));
 const googleAuthService = new GoogleAuthService({ jwksUrl: process.env.GOOGLE_JWKS_URL });
@@ -143,6 +144,18 @@ function stripSensitiveDocument(row = {}) {
   return safe;
 }
 
+function isExplicitTestRuntime() {
+  return String(process.env.NODE_ENV || '').trim().toLowerCase() === 'test';
+}
+
+function isLoopbackRequest(req = {}) {
+  const host = String(req.headers?.host || '').split(':')[0].trim().toLowerCase();
+  const remoteAddressRaw = String(req.socket?.remoteAddress || req.connection?.remoteAddress || '').trim().toLowerCase();
+  const remoteAddress = remoteAddressRaw.startsWith('::ffff:') ? remoteAddressRaw.slice(7) : remoteAddressRaw;
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  return loopbackHosts.has(host) && loopbackHosts.has(remoteAddress);
+}
+
 function tenantCheck(record = {}, actor = {}) {
   if (!record || typeof record !== 'object') return { ok: true };
   if (actor.companyId && record.CompanyID && String(record.CompanyID) !== String(actor.companyId)) {
@@ -253,6 +266,41 @@ async function handleApi(req, res, url) {
         runtime.auth.revokeSession(context.sessionId);
       }
       sendJson(res, { ok: true }, 200, { 'Set-Cookie': buildSessionCookie('', 0) });
+      return;
+    }
+
+    if (pathname === '/api/auth/test-session' && req.method === 'POST') {
+      if (!isExplicitTestRuntime() || !isLoopbackRequest(req)) {
+        sendJson(res, { ok: false, error: 'Not found' }, 404);
+        return;
+      }
+      const testSecret = String(process.env.SIG_REALTY_TEST_SESSION_TOKEN || '').trim();
+      if (!testSecret) { sendJson(res, { ok: false, error: 'Not found' }, 404); return; }
+      const body = await readJson(req);
+      if (!body || String(body.secret || '').trim() !== testSecret) {
+        sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+        return;
+      }
+      const userId = String(body.userId || '').trim();
+      if (userId !== TEST_SESSION_FIXTURE_USER_ID) {
+        sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+        return;
+      }
+      const user = runtime.repository.getUser(userId);
+      if (!user || String(user.Status || '').trim().toUpperCase() !== 'ACTIVE') {
+        sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+        return;
+      }
+      const companyId = String(user.CompanyID || user.CompanyId || 'COMP-0001').trim();
+      const brokerageId = String(user.BrokerageID || user.BrokerageId || 'BRO-0001').trim();
+      const sessionId = runtime.auth.issueSession({
+        userId: user.UserID,
+        role: user.Role,
+        companyId,
+        brokerageId,
+        permissions: Array.isArray(user.Permissions) ? user.Permissions : []
+      });
+      sendJson(res, { ok: true, data: { token: sessionId } });
       return;
     }
 
