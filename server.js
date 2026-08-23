@@ -167,52 +167,64 @@ function tenantCheck(record = {}, actor = {}) {
   return { ok: true };
 }
 
-function resolveTenantScopedRecord(record = {}) {
+function resolveTenantScopedRecord(record = {}, seen = new Set()) {
   if (!record || typeof record !== 'object') return null;
   if (record.CompanyID || record.BrokerageID) {
     return { CompanyID: record.CompanyID || null, BrokerageID: record.BrokerageID || null };
   }
 
+  const recordKey = [
+    record.LeadID || record.leadId || '',
+    record.RequirementID || record.requirementId || '',
+    record.DealID || record.dealId || '',
+    record.NegotiationID || record.negotiationId || '',
+    record.TokenID || record.tokenId || '',
+    record.ShortlistID || record.shortlistId || '',
+    record.VisitID || record.visitId || record.SiteVisitID || record.siteVisitId || ''
+  ].join('|');
+  if (recordKey && seen.has(recordKey)) return null;
+  if (recordKey) seen.add(recordKey);
+
   const leadId = record.LeadID || record.leadId;
   if (leadId) {
     const lead = runtime.repository.readLead(leadId);
-    if (lead) return resolveTenantScopedRecord(lead);
+    if (lead) return resolveTenantScopedRecord(lead, seen);
   }
 
   const requirementId = record.RequirementID || record.requirementId;
   if (requirementId) {
     const requirement = runtime.repository.readRequirement(requirementId);
-    if (requirement) return resolveTenantScopedRecord(requirement);
+    if (requirement) return resolveTenantScopedRecord(requirement, seen);
   }
 
   const dealId = record.DealID || record.dealId;
   if (dealId) {
     const deal = runtime.repository.getDeal(dealId);
-    if (deal) return resolveTenantScopedRecord(deal);
+    if (deal) return resolveTenantScopedRecord(deal, seen);
   }
 
   const negotiationId = record.NegotiationID || record.negotiationId;
   if (negotiationId) {
     const negotiation = runtime.repository.getNegotiation(negotiationId);
-    if (negotiation) return resolveTenantScopedRecord(negotiation);
+    if (negotiation) return resolveTenantScopedRecord(negotiation, seen);
   }
 
   const tokenId = record.TokenID || record.tokenId;
   if (tokenId) {
     const token = runtime.repository.getToken(tokenId);
-    if (token) return resolveTenantScopedRecord(token);
+    if (token) return resolveTenantScopedRecord(token, seen);
   }
 
   const shortlistId = record.ShortlistID || record.shortlistId;
   if (shortlistId) {
     const shortlist = runtime.repository.getShortlist(shortlistId);
-    if (shortlist) return resolveTenantScopedRecord(shortlist);
+    if (shortlist) return resolveTenantScopedRecord(shortlist, seen);
   }
 
   const visitId = record.VisitID || record.visitId || record.SiteVisitID || record.siteVisitId;
   if (visitId) {
     const visit = runtime.repository.getSiteVisit(visitId);
-    if (visit?.ok && visit.data) return resolveTenantScopedRecord(visit.data);
+    if (visit?.ok && visit.data) return resolveTenantScopedRecord(visit.data, seen);
   }
 
   return null;
@@ -1155,8 +1167,8 @@ async function handleApi(req, res, url) {
       const actor = getAuthenticatedActor(req, url);
       if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const listed = await runtime.listCommissions();
-      if (!listed?.ok) {
-        sendJson(res, listed, listed.statusCode || 400);
+      if (!listed || !listed.ok) {
+        sendJson(res, listed || { ok: false, error: 'Unable to load commissions' }, listed?.statusCode || 400);
         return;
       }
       const rows = filterByTenant(listed.data || [], actor);
@@ -1186,7 +1198,11 @@ async function handleApi(req, res, url) {
         return;
       }
       const existingCommission = runtime.repository.getCommission(commissionId);
-      if (existingCommission && !enforceTenantReference(existingCommission, actor, res)) return;
+      if (!existingCommission) {
+        sendJson(res, { ok: false, error: 'Commission not found' }, 404);
+        return;
+      }
+      if (!enforceTenantReference(existingCommission, actor, res)) return;
 
       if (req.method === 'GET' && !action) {
         const payload = await runtime.getCommission(commissionId);
