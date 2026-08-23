@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   vm-health:
+    # Read-only diagnostics only; no production mutations.
     runs-on: ubuntu-latest
     steps:
       - name: Configure SSH
