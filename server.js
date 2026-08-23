@@ -9,6 +9,7 @@ const { GoogleAuthService } = require('./src/services/googleAuthService');
 const PORT = process.env.PORT || 4173;
 const ROOT = __dirname;
 const runtime = new SignatureRealtyRuntime();
+const TEST_SESSION_FIXTURE_USER_ID = 'USR-0001';
 // V2 Router shares the same repository instance as the runtime
 const v2Router = new V2Router(runtime.repository, (req, url) => resolveSessionActor(req, url));
 const googleAuthService = new GoogleAuthService({ jwksUrl: process.env.GOOGLE_JWKS_URL });
@@ -280,8 +281,8 @@ async function handleApi(req, res, url) {
         sendJson(res, { ok: false, error: 'Forbidden' }, 403);
         return;
       }
-      const userId = String(body.userId || 'USR-0001').trim();
-      if (userId !== 'USR-0001') {
+      const userId = String(body.userId || '').trim();
+      if (userId !== TEST_SESSION_FIXTURE_USER_ID) {
         sendJson(res, { ok: false, error: 'Forbidden' }, 403);
         return;
       }
