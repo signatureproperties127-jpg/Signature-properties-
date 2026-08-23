@@ -94,3 +94,64 @@ test('google auth config endpoint returns 503 when client id is missing', async 
     await stopServer(child);
   }
 });
+
+test('test-session endpoint stays unavailable outside explicit test runtime', async () => {
+  const dbFile = makeDbFile();
+  const { child, baseUrl } = await startServer(dbFile, {
+    env: {
+      NODE_ENV: 'production',
+      SIG_REALTY_TEST_SESSION_TOKEN: 'pw-e2e-secret'
+    }
+  });
+
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/test-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: 'pw-e2e-secret', userId: 'USR-0001' })
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 404);
+    assert.equal(payload.ok, false);
+  } finally {
+    await stopServer(child);
+  }
+});
+
+test('test-session endpoint in test runtime cannot mint arbitrary privileged sessions', async () => {
+  const dbFile = makeDbFile();
+  const { child, baseUrl } = await startServer(dbFile, {
+    env: {
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: 'pw-e2e-secret'
+    }
+  });
+
+  try {
+    const unauthorized = await requestJson(baseUrl, '/api/auth/test-session', {
+      method: 'POST',
+      body: { secret: 'pw-e2e-secret', userId: 'USR-9999' }
+    });
+    assert.equal(unauthorized.response.status, 403);
+
+    const issued = await requestJson(baseUrl, '/api/auth/test-session', {
+      method: 'POST',
+      body: { secret: 'pw-e2e-secret', userId: 'USR-0001' }
+    });
+    assert.equal(issued.response.status, 200);
+    assert.equal(issued.payload.ok, true);
+    const token = issued.payload.data.token;
+    assert.ok(token);
+
+    const protectedWithoutSession = await requestJson(baseUrl, '/api/dashboard');
+    assert.equal(protectedWithoutSession.response.status, 401);
+
+    const protectedWithSession = await requestJson(baseUrl, '/api/dashboard', {
+      headers: { 'x-session-token': token }
+    });
+    assert.equal(protectedWithSession.response.status, 200);
+    assert.equal(protectedWithSession.payload.ok, true);
+  } finally {
+    await stopServer(child);
+  }
+});

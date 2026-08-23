@@ -143,6 +143,18 @@ function stripSensitiveDocument(row = {}) {
   return safe;
 }
 
+function isExplicitTestRuntime() {
+  return String(process.env.NODE_ENV || '').trim().toLowerCase() === 'test';
+}
+
+function isLoopbackRequest(req = {}) {
+  const host = String(req.headers?.host || '').split(':')[0].trim().toLowerCase();
+  const remoteAddressRaw = String(req.socket?.remoteAddress || req.connection?.remoteAddress || '').trim().toLowerCase();
+  const remoteAddress = remoteAddressRaw.startsWith('::ffff:') ? remoteAddressRaw.slice(7) : remoteAddressRaw;
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  return loopbackHosts.has(host) && loopbackHosts.has(remoteAddress);
+}
+
 function tenantCheck(record = {}, actor = {}) {
   if (!record || typeof record !== 'object') return { ok: true };
   if (actor.companyId && record.CompanyID && String(record.CompanyID) !== String(actor.companyId)) {
@@ -257,6 +269,10 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/auth/test-session' && req.method === 'POST') {
+      if (!isExplicitTestRuntime() || !isLoopbackRequest(req)) {
+        sendJson(res, { ok: false, error: 'Not found' }, 404);
+        return;
+      }
       const testSecret = String(process.env.SIG_REALTY_TEST_SESSION_TOKEN || '').trim();
       if (!testSecret) { sendJson(res, { ok: false, error: 'Not found' }, 404); return; }
       const body = await readJson(req);
@@ -265,12 +281,27 @@ async function handleApi(req, res, url) {
         return;
       }
       const userId = String(body.userId || 'USR-0001').trim();
+      if (userId !== 'USR-0001') {
+        sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+        return;
+      }
+      const user = runtime.repository.getUser(userId);
+      if (!user || String(user.Status || '').trim().toUpperCase() !== 'ACTIVE') {
+        sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+        return;
+      }
+      const companyId = String(user.CompanyID || user.CompanyId || '').trim();
+      const brokerageId = String(user.BrokerageID || user.BrokerageId || '').trim();
+      if (!companyId || !brokerageId) {
+        sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+        return;
+      }
       const sessionId = runtime.auth.issueSession({
-        userId,
-        role: 'ADMIN',
-        companyId: 'COMP-0001',
-        brokerageId: 'BRO-0001',
-        permissions: ['*']
+        userId: user.UserID,
+        role: user.Role,
+        companyId,
+        brokerageId,
+        permissions: Array.isArray(user.Permissions) ? user.Permissions : []
       });
       sendJson(res, { ok: true, data: { token: sessionId } });
       return;
