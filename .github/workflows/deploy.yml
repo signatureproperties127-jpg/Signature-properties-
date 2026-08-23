@@ -127,11 +127,22 @@ jobs:
           WantedBy=multi-user.target
           UNIT
 
-          # Write GOOGLE_CLIENT_ID to protected EnvironmentFile (never echoed to logs)
+          # Write GOOGLE_CLIENT_ID to protected EnvironmentFile when provided; otherwise keep existing value.
           sudo mkdir -p /etc/signature-realty
-          sudo tee /etc/signature-realty/signature-realty.env > /dev/null <<ENVFILE
-          GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
-          ENVFILE
+          if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then
+            ENV_TMP="$(mktemp)"
+            printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID" > "$ENV_TMP"
+            sudo install -o root -g root -m 600 "$ENV_TMP" /etc/signature-realty/signature-realty.env
+            rm -f "$ENV_TMP"
+          else
+            if sudo test -f /etc/signature-realty/signature-realty.env && \
+               sudo grep -Eq '^GOOGLE_CLIENT_ID=.+$' /etc/signature-realty/signature-realty.env; then
+              echo "GOOGLE_CLIENT_ID not provided by GitHub Actions; using existing VM EnvironmentFile value."
+            else
+              echo "GOOGLE_CLIENT_ID is missing in GitHub Actions and VM EnvironmentFile." >&2
+              exit 1
+            fi
+          fi
           sudo chmod 600 /etc/signature-realty/signature-realty.env
           sudo chown root:root /etc/signature-realty/signature-realty.env
 
@@ -155,6 +166,7 @@ jobs:
           test "$NODE_PID" -gt 0
           test "$(readlink -f "/proc/$NODE_PID/cwd")" = "$APP_HOME"
           tr '\0' ' ' < "/proc/$NODE_PID/cmdline" | grep -F 'server.js'
+          sudo tr '\0' '\n' < "/proc/$NODE_PID/environ" | grep -Eq '^GOOGLE_CLIENT_ID=.+$'
 
           ss -ltnp | grep -F ':4173'
 
