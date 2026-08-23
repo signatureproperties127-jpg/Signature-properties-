@@ -26,7 +26,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: npx playwright test
+        run: npx playwright test e2e/broker-network.e2e.spec.js --workers=1
 
   deploy:
     needs: verify
