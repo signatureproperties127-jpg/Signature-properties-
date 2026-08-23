@@ -380,6 +380,10 @@ async function handleApi(req, res, url) {
 
       if (req.method === 'PATCH') {
         const body = await readJson(req);
+        const existing = await runtime.readLead(leadId);
+        if (!existing.ok) { sendJson(res, { ok: false, error: 'Lead not found' }, 404); return; }
+        const scope = tenantCheck(existing.data, actor);
+        if (!scope.ok) { sendJson(res, { ok: false, error: 'Forbidden' }, 403); return; }
         const payload = await runtime.updateLead(leadId, { ...body, params: { leadId } });
         sendJson(res, payload);
         return;
@@ -406,12 +410,16 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/transactions') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.router.route('transactions', 'list');
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/followups') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       if (req.method === 'GET') {
         const leadId = url.searchParams.get('leadId') || url.searchParams.get('LeadID') || undefined;
         const requirementId = url.searchParams.get('requirementId') || url.searchParams.get('RequirementID') || undefined;
@@ -497,12 +505,20 @@ async function handleApi(req, res, url) {
 
       if (req.method === 'PATCH') {
         const body = await readJson(req);
+        const existing = await runtime.readRequirement(requirementId);
+        if (!existing.ok) { sendJson(res, { ok: false, error: 'Requirement not found' }, 404); return; }
+        const scope = tenantCheck(existing.data, actor);
+        if (!scope.ok) { sendJson(res, { ok: false, error: 'Forbidden' }, 403); return; }
         const payload = await runtime.updateRequirement(requirementId, body);
         sendJson(res, payload);
         return;
       }
 
       if (req.method === 'DELETE') {
+        const existing = await runtime.readRequirement(requirementId);
+        if (!existing.ok) { sendJson(res, { ok: false, error: 'Requirement not found' }, 404); return; }
+        const scope = tenantCheck(existing.data, actor);
+        if (!scope.ok) { sendJson(res, { ok: false, error: 'Forbidden' }, 403); return; }
         const payload = await runtime.deleteRequirement(requirementId);
         sendJson(res, payload);
         return;
@@ -1103,12 +1119,16 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/brokers') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.router.route('brokers', 'list');
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/calendar' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const followUps = await runtime.listFollowUps({});
       const events = (followUps.data || []).map((item) => ({
         FollowUpID: item.FollowUpID,
@@ -1766,6 +1786,8 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/search' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const query = url.searchParams.get('q') || '';
       const payload = await runtime.globalSearch(query);
       sendJson(res, payload);
