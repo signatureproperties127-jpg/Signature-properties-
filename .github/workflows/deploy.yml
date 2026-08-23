@@ -168,6 +168,10 @@ jobs:
           test "$(readlink -f "/proc/$NODE_PID/cwd")" = "$APP_HOME"
           tr '\0' ' ' < "/proc/$NODE_PID/cmdline" | grep -F 'server.js'
 
+          for i in $(seq 1 15); do
+            ss -ltnp | grep -qF ':4173' && break
+            sleep 1
+          done
           ss -ltnp | grep -F ':4173'
 
           expect_http_status GET /api/auth/config 200
