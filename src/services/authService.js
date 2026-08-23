@@ -187,7 +187,10 @@ class AuthService {
       .split(';')
       .map((part) => part.trim())
       .filter(Boolean)
-      .map((entry) => entry.split('='))
+      .map((entry) => {
+        const idx = entry.indexOf('=');
+        return idx === -1 ? [entry, ''] : [entry.slice(0, idx), entry.slice(idx + 1)];
+      })
       .find(([name]) => name === SESSION_COOKIE_NAME)?.[1] || '';
     let cookieToken = rawCookieToken;
     try {
