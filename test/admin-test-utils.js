@@ -6,7 +6,8 @@ const { once } = require('node:events');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const { JsonRepository } = require('../src/data/repository');
-const { signInWithGoogle, startJwksServer } = require('./googleAuthTestUtils');
+const { startJwksServer } = require('./googleAuthTestUtils');
+const { TEST_SESSION_SECRET } = require('./session-test-utils');
 
 const IDENTITY_HEADERS = new Set([
   'x-user-id',
@@ -17,7 +18,6 @@ const IDENTITY_HEADERS = new Set([
   'x-brokerage-id',
   'x-brokerageid'
 ]);
-const TEST_SESSION_SECRET = 'sig-realty-test-session-secret';
 const serverAuthContexts = new Map();
 let googleAuthHarnessPromise;
 
@@ -41,9 +41,9 @@ function makeDbFile(prefix = 'sig-admin-test-') {
 function ensureTenantScopedDefaultUsers(dbFile) {
   const repository = new JsonRepository(dbFile);
   const tenantUsers = [
-    { UserID: 'USR-0001', CompanyID: 'COMP-001', BrokerageID: 'BRK-001' },
-    { UserID: 'USR-0002', CompanyID: 'COMP-001', BrokerageID: 'BRK-001' },
-    { UserID: 'USR-0003', CompanyID: 'COMP-001', BrokerageID: 'BRK-001' }
+    { UserID: 'USR-0001', CompanyID: 'COMP-001', BrokerageID: 'BRO-0001' },
+    { UserID: 'USR-0002', CompanyID: 'COMP-001', BrokerageID: 'BRO-0001' },
+    { UserID: 'USR-0003', CompanyID: 'COMP-001', BrokerageID: 'BRO-0001' }
   ];
   for (const entry of tenantUsers) {
     const user = repository.getUser(entry.UserID);
@@ -151,18 +151,44 @@ function normalizePermissions(value, fallback = []) {
 async function issueSessionToken(baseUrl, user = {}, headers = {}) {
   const context = serverAuthContexts.get(baseUrl);
   if (!context) return '';
-  const repository = new JsonRepository(context.dbFile);
-  const companyId = String(headers['x-company-id'] || headers['x-companyid'] || user.CompanyID || 'COMP-001').trim();
-  const brokerageId = String(headers['x-brokerage-id'] || headers['x-brokerageid'] || user.BrokerageID || 'BRK-001').trim();
-  const role = String(headers['x-user-role'] || user.Role || 'AGENT').trim().toUpperCase();
-  const permissions = normalizePermissions(headers['x-user-permissions'] || user.Permissions, user.Permissions || []);
-  repository.updateUser('USR-0001', {
-    Role: role,
-    CompanyID: companyId,
-    BrokerageID: brokerageId,
-    Permissions: permissions
-  }, { userId: 'USR-0001', role: 'ADMIN' });
+  const requestedUserId = String(headers['x-user-id'] || headers['x-userid'] || '').trim();
+  const requestedRole = String(headers['x-user-role'] || '').trim().toUpperCase();
+  let rawUser = null;
+  try {
+    const rawDb = JSON.parse(fs.readFileSync(context.dbFile, 'utf8'));
+    const rawUsers = Array.isArray(rawDb?.Users) ? rawDb.Users : [];
+    rawUser = requestedUserId
+      ? (rawUsers.find((entry) => String(entry?.UserID || '').trim() === requestedUserId) || null)
+      : null;
+    if (!rawUser && requestedRole) {
+      rawUser = rawUsers.find((entry) => String(entry?.Role || '').trim().toUpperCase() === requestedRole) || null;
+    }
+  } catch (_) {
+    rawUser = null;
+  }
 
+  const companyId = String(headers['x-company-id'] || headers['x-companyid'] || rawUser?.CompanyID || user.CompanyID || 'COMP-001').trim();
+  const brokerageId = String(headers['x-brokerage-id'] || headers['x-brokerageid'] || rawUser?.BrokerageID || user.BrokerageID || 'BRO-0001').trim();
+  const role = String(headers['x-user-role'] || rawUser?.Role || user.Role || 'AGENT').trim().toUpperCase();
+  const permissions = normalizePermissions(headers['x-user-permissions'] || rawUser?.Permissions || user.Permissions, rawUser?.Permissions || user.Permissions || []);
+  try {
+    const rawDb = JSON.parse(fs.readFileSync(context.dbFile, 'utf8'));
+    const users = Array.isArray(rawDb?.Users) ? rawDb.Users : [];
+    const index = users.findIndex((entry) => String(entry?.UserID || '').trim() === 'USR-0001');
+    if (index !== -1) {
+      users[index] = {
+        ...users[index],
+        Role: role,
+        CompanyID: companyId,
+        BrokerageID: brokerageId,
+        Permissions: permissions
+      };
+      rawDb.Users = users;
+      fs.writeFileSync(context.dbFile, JSON.stringify(rawDb, null, 2));
+    }
+  } catch (_) {
+    // best-effort patch for test fixtures
+  }
   const cacheKey = JSON.stringify({ role, companyId, brokerageId, permissions });
   if (context.tokens.has(cacheKey)) {
     return context.tokens.get(cacheKey);

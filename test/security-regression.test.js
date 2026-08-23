@@ -88,8 +88,18 @@ function makeTenantDb() {
 
 // Identity headers for admin-test-utils → resolves to a real Google session.
 // These users MUST have CompanyID/BrokerageID so resolveRequestContext passes.
-const tenantAHeaders = { 'x-user-id': 'USR-TENANT-A', 'x-user-role': 'AGENT' };
-const tenantBHeaders = { 'x-user-id': 'USR-TENANT-B', 'x-user-role': 'AGENT' };
+const tenantAHeaders = {
+  'x-user-id': 'USR-TENANT-A',
+  'x-user-role': 'MANAGER',
+  'x-company-id': 'COMP-AAA',
+  'x-brokerage-id': 'BRK-AAA'
+};
+const tenantBHeaders = {
+  'x-user-id': 'USR-TENANT-B',
+  'x-user-role': 'MANAGER',
+  'x-company-id': 'COMP-BBB',
+  'x-brokerage-id': 'BRK-BBB'
+};
 
 /**
  * Stamp a CompanyID/BrokerageID directly onto an existing lead record.
@@ -158,6 +168,8 @@ function seedP0OperationalGraph(dbFile, { companyId, brokerageId, tag }) {
     Project: `Project ${tag}`,
     Category: 'Residential',
     TransactionType: 'Purchase',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
     CreatedAt: now,
     UpdatedAt: now
   });
@@ -167,6 +179,8 @@ function seedP0OperationalGraph(dbFile, { companyId, brokerageId, tag }) {
     PropertyID: propertyId,
     Score: 95,
     MatchLevel: 'High',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
     CreatedAt: now,
     UpdatedAt: now
   });
@@ -845,6 +859,7 @@ test('broker-network public share routes remain accessible without auth after se
     assert.equal(reqRes.response.status, 200);
     const requirementId = reqRes.payload.data?.RequirementID || reqRes.payload.RequirementID;
     assert.ok(requirementId);
+    stampRequirementTenant(dbFile, requirementId, 'COMP-AAA', 'BRK-AAA');
 
     // Tenant A creates a broker-network share for their own requirement
     const shareRes = await requestJson(server.baseUrl, '/api/broker-network/shares', {

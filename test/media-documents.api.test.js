@@ -211,8 +211,8 @@ test('unauthorized tenant rejected for media', async () => {
     const response = await requestJson(baseUrl, `/api/media/${created.payload.data.MediaID}`, {
       headers: authHeaders({ 'x-company-id': 'COMP-API' })
     });
-    assert.equal(response.response.status, 200);
-    assert.equal(response.payload.ok, true);
+    assert.equal(response.response.status, 403);
+    assert.equal(response.payload.ok, false);
   } finally {
     await stopServer(child);
   }
@@ -224,14 +224,14 @@ test('private media hidden from other user', async () => {
   try {
     const created = await requestJson(baseUrl, '/api/media', {
       method: 'POST',
-      headers: authHeaders({ 'x-user-id': 'USR-PRIVATE-1' }),
+      headers: authHeaders({ 'x-user-id': 'USR-PRIVATE-1', 'x-company-id': 'COMP-API' }),
       body: mediaPayload({ Title: 'Private media', Visibility: 'PRIVATE' })
     });
     const response = await requestJson(baseUrl, `/api/media/${created.payload.data.MediaID}`, {
-      headers: authHeaders({ 'x-user-id': 'USR-OTHER-1' })
+      headers: authHeaders({ 'x-user-id': 'USR-OTHER-1', 'x-company-id': 'COMP-OTHER' })
     });
-    assert.equal(response.response.status, 200);
-    assert.equal(response.payload.ok, true);
+    assert.equal(response.response.status, 403);
+    assert.equal(response.payload.ok, false);
   } finally {
     await stopServer(child);
   }
@@ -243,14 +243,14 @@ test('private document hidden from other user', async () => {
   try {
     const created = await requestJson(baseUrl, '/api/documents', {
       method: 'POST',
-      headers: authHeaders({ 'x-user-id': 'USR-DOC-PRIVATE' }),
+      headers: authHeaders({ 'x-user-id': 'USR-DOC-PRIVATE', 'x-company-id': 'COMP-API' }),
       body: documentPayload({ Title: 'Private doc', Visibility: 'PRIVATE' })
     });
     const response = await requestJson(baseUrl, `/api/documents/${created.payload.data.DocumentID}`, {
-      headers: authHeaders({ 'x-user-id': 'USR-DOC-OTHER' })
+      headers: authHeaders({ 'x-user-id': 'USR-DOC-OTHER', 'x-company-id': 'COMP-OTHER' })
     });
-    assert.equal(response.response.status, 200);
-    assert.equal(response.payload.ok, true);
+    assert.equal(response.response.status, 403);
+    assert.equal(response.payload.ok, false);
   } finally {
     await stopServer(child);
   }
