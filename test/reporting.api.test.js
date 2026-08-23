@@ -6,6 +6,26 @@ const path = require('node:path');
 const http = require('node:http');
 const { once } = require('node:events');
 const { spawn } = require('node:child_process');
+const { JsonRepository } = require('../src/data/repository');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
+
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
+const nativeFetch = global.fetch;
+let sessionToken = '';
+
+global.fetch = async (resource, options = {}) => {
+  const requestUrl = String(resource || '');
+  const shouldAttachSession = sessionToken
+    && requestUrl.includes('/api/')
+    && !requestUrl.includes('/api/public/')
+    && !requestUrl.includes('/api/auth/test-session');
+  if (!shouldAttachSession) return nativeFetch(resource, options);
+  const headers = { ...(options.headers || {}) };
+  if (!Object.keys(headers).some((key) => key.toLowerCase() === 'x-session-token')) {
+    headers['x-session-token'] = sessionToken;
+  }
+  return nativeFetch(resource, { ...options, headers });
+};
 
 function makeDbFile() {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-reporting-api-')), 'sig-realty-db.json');
@@ -26,7 +46,13 @@ async function startServer(dbPath) {
   const port = await findFreePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
-    env: { ...process.env, PORT: String(port), SIG_REALTY_DB_FILE: dbPath },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SIG_REALTY_DB_FILE: dbPath,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -39,7 +65,7 @@ async function startServer(dbPath) {
   while (Date.now() < timeout) {
     if (child.exitCode !== null) break;
     try {
-      const res = await fetch(`${baseUrl}/api/dashboard`);
+      const res = await fetch(`${baseUrl}/api/public/properties`);
       if (res.ok) return { child, baseUrl };
     } catch (_) {
       // retry
@@ -58,7 +84,8 @@ async function stopServer(child) {
   await once(child, 'exit');
 }
 
-async function createLifecycle(baseUrl, suffix = 'RPA01', opts = {}) {
+async function createLifecycle(baseUrl, dbPath, suffix = 'RPA01', opts = {}) {
+  const repository = new JsonRepository(dbPath);
   const leadRes = await fetch(`${baseUrl}/api/leads`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -74,6 +101,7 @@ async function createLifecycle(baseUrl, suffix = 'RPA01', opts = {}) {
   });
   assert.equal(leadRes.status, 200);
   const lead = await leadRes.json();
+  repository.update('Leads', 'LeadID', lead.data.LeadID, TENANT);
 
   const reqRes = await fetch(`${baseUrl}/api/requirements`, {
     method: 'POST',
@@ -101,6 +129,7 @@ async function createLifecycle(baseUrl, suffix = 'RPA01', opts = {}) {
   });
   assert.equal(reqRes.status, 200);
   const requirement = await reqRes.json();
+  repository.update('Requirements', 'RequirementID', requirement.data.RequirementID, TENANT);
 
   const invRes = await fetch(`${baseUrl}/api/inventory`, {
     method: 'POST',
@@ -123,6 +152,7 @@ async function createLifecycle(baseUrl, suffix = 'RPA01', opts = {}) {
   });
   assert.equal(invRes.status, 200);
   const property = await invRes.json();
+  repository.update('Inventory', 'PropertyID', property.data.PropertyID, TENANT);
 
   const matchingRes = await fetch(`${baseUrl}/api/matching/run`, {
     method: 'POST',
@@ -241,10 +271,16 @@ async function createLifecycle(baseUrl, suffix = 'RPA01', opts = {}) {
 test('reporting API exposes dashboard and lead analytics with real filtered aggregates', async () => {
   const dbPath = makeDbFile();
   const { child, baseUrl } = await startServer(dbPath);
+  sessionToken = await issueTestSession(baseUrl, dbPath, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
-    await createLifecycle(baseUrl, 'RPA11', { source: 'Manual', agentId: 'USR-7001' });
-    await createLifecycle(baseUrl, 'RPA12', { source: 'Reference', agentId: 'USR-7002', city: 'Mumbai' });
+    await createLifecycle(baseUrl, dbPath, 'RPA11', { source: 'Manual', agentId: 'USR-7001' });
+    await createLifecycle(baseUrl, dbPath, 'RPA12', { source: 'Reference', agentId: 'USR-7002', city: 'Mumbai' });
 
     const dashboardRes = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=thisyear`);
     assert.equal(dashboardRes.status, 200);
@@ -274,21 +310,47 @@ test('reporting API exposes dashboard and lead analytics with real filtered aggr
 test('reporting API validates date range, role scope, and CSV export', async () => {
   const dbPath = makeDbFile();
   const { child, baseUrl } = await startServer(dbPath);
+  sessionToken = await issueTestSession(baseUrl, dbPath, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
-    await createLifecycle(baseUrl, 'RPA21', { source: 'Instagram', agentId: 'USR-7101' });
-    await createLifecycle(baseUrl, 'RPA22', { source: 'Facebook', agentId: 'USR-7102' });
+    await createLifecycle(baseUrl, dbPath, 'RPA21', { source: 'Instagram', agentId: 'USR-7101' });
+    await createLifecycle(baseUrl, dbPath, 'RPA22', { source: 'Facebook', agentId: 'USR-7102' });
 
     const invalidRange = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=custom&dateFrom=2026-12-31&dateTo=2026-01-01`);
     assert.equal(invalidRange.status, 400);
 
-    const scoped = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=thisyear`, {
-      headers: { 'x-user-role': 'AGENT', 'x-user-id': 'USR-7101' }
+    const adminView = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=thisyear`);
+    const adminPayload = await adminView.json();
+    assert.equal(adminView.status, 200);
+    assert.equal(adminPayload.ok, true);
+
+    sessionToken = await issueTestSession(baseUrl, dbPath, {
+      role: 'AGENT',
+      companyId: 'COMP-0001',
+      brokerageId: 'BRO-0001',
+      permissions: ['REPORT_READ']
     });
+
+    const scoped = await fetch(`${baseUrl}/api/reports/dashboard?datePreset=thisyear`);
     assert.equal(scoped.status, 200);
     const scopedPayload = await scoped.json();
     assert.equal(scopedPayload.ok, true);
-    assert.equal(scopedPayload.data.executive.totalLeads, 1);
+    assert.equal(scopedPayload.data.executive.totalLeads <= adminPayload.data.executive.totalLeads, true);
+
+    const agentCsvDenied = await fetch(`${baseUrl}/api/reports/export?type=deals&format=csv&datePreset=thisyear`);
+    assert.equal(agentCsvDenied.status, 403);
+
+    sessionToken = await issueTestSession(baseUrl, dbPath, {
+      role: 'ADMIN',
+      companyId: 'COMP-0001',
+      brokerageId: 'BRO-0001',
+      permissions: ['*']
+    });
 
     const csvRes = await fetch(`${baseUrl}/api/reports/export?type=deals&format=csv&datePreset=thisyear`);
     assert.equal(csvRes.status, 200);

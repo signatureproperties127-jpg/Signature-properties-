@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { JsonRepository } = require('../src/data/repository');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
 
 const dbFile = path.join(os.tmpdir(), `sig-sitevisit-api-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
 process.env.SIG_REALTY_DB_FILE = dbFile;
@@ -13,6 +14,8 @@ process.env.SIG_REALTY_DB_FILE = dbFile;
 let server;
 let baseUrl;
 let testPort;
+let sessionToken = '';
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -39,7 +42,13 @@ function getFreePort() {
 function startServer() {
   return new Promise((resolve, reject) => {
     server = spawn(process.execPath, ['server.js'], {
-      env: { ...process.env, PORT: String(testPort), SIG_REALTY_DB_FILE: dbFile },
+      env: {
+        ...process.env,
+        PORT: String(testPort),
+        SIG_REALTY_DB_FILE: dbFile,
+        NODE_ENV: 'test',
+        SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+      },
       cwd: path.join(__dirname, '..')
     });
 
@@ -71,12 +80,16 @@ function startServer() {
 
 function request(pathname, options = {}) {
   return new Promise((resolve, reject) => {
+    const headers = { ...(options.headers || {}) };
+    if (sessionToken && !Object.keys(headers).some((key) => key.toLowerCase() === 'x-session-token')) {
+      headers['x-session-token'] = sessionToken;
+    }
     const req = http.request({
       hostname: '127.0.0.1',
       port: testPort,
       path: pathname,
       method: options.method || 'GET',
-      headers: options.headers || {}
+      headers
     }, (res) => {
       let body = '';
       res.setEncoding('utf8');
@@ -100,17 +113,26 @@ test('site visit API lifecycle works', async () => {
   repository.createMatch({ MatchID: 'MATCH-API-SITE', RequirementID: seededRequirement.RequirementID, PropertyID: 'PROP-API-SITE', LeadID: seededLead.LeadID, Score: 92, MatchLevel: 'Strong', MatchedCriteria: ['Budget', 'Location'], FailedCriteria: [], UnknownCriteria: [], ScoreBreakdown: {}, Explanation: 'Strong fit', Status: 'Active' });
 
   await startServer();
+  sessionToken = await issueTestSession(baseUrl, dbFile, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
     const leadResp = await request('/api/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientName: 'Lina', city: 'Bengaluru', phone: '+91 11111', email: 'lina@test.com', leadStatus: 'Active' }) });
     const leadPayload = JSON.parse(leadResp.body);
     const lead = leadPayload.data;
+    repository.update('Leads', 'LeadID', lead.LeadID, TENANT);
 
     const requirementResp = await request('/api/requirements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId: lead.LeadID, transactionType: 'Purchase', category: 'Residential', propertyType: 'Apartment', location1: 'Whitefield', budgetMin: 12000000, budgetMax: 15000000 }) });
     const requirement = JSON.parse(requirementResp.body).data;
+    repository.update('Requirements', 'RequirementID', requirement.RequirementID, TENANT);
 
     const propertyResp = await request('/api/inventory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId: 'PROP-API-TEST', transactionType: 'Purchase', category: 'Residential', propertyType: 'Apartment', project: 'Bay View', location: 'Whitefield', city: 'Bengaluru', bhk: 2, area: 1400, price: 13500000, status: 'Available' }) });
     const property = JSON.parse(propertyResp.body).data;
+    repository.update('Inventory', 'PropertyID', property.PropertyID, TENANT);
 
     const matchResp = await request('/api/matching/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requirementId: requirement.RequirementID }) });
     const matchPayload = JSON.parse(matchResp.body);

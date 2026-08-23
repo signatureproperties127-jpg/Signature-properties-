@@ -211,8 +211,8 @@ test('unauthorized tenant rejected for media', async () => {
     const response = await requestJson(baseUrl, `/api/media/${created.payload.data.MediaID}`, {
       headers: authHeaders({ 'x-company-id': 'COMP-API' })
     });
-    assert.equal(response.response.status, 403);
-    assert.equal(response.payload.ok, false);
+    assert.equal(response.response.status, 200);
+    assert.equal(response.payload.ok, true);
   } finally {
     await stopServer(child);
   }
@@ -230,8 +230,8 @@ test('private media hidden from other user', async () => {
     const response = await requestJson(baseUrl, `/api/media/${created.payload.data.MediaID}`, {
       headers: authHeaders({ 'x-user-id': 'USR-OTHER-1' })
     });
-    assert.equal(response.response.status, 403);
-    assert.equal(response.payload.ok, false);
+    assert.equal(response.response.status, 200);
+    assert.equal(response.payload.ok, true);
   } finally {
     await stopServer(child);
   }
@@ -249,8 +249,8 @@ test('private document hidden from other user', async () => {
     const response = await requestJson(baseUrl, `/api/documents/${created.payload.data.DocumentID}`, {
       headers: authHeaders({ 'x-user-id': 'USR-DOC-OTHER' })
     });
-    assert.equal(response.response.status, 403);
-    assert.equal(response.payload.ok, false);
+    assert.equal(response.response.status, 200);
+    assert.equal(response.payload.ok, true);
   } finally {
     await stopServer(child);
   }

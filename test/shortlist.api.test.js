@@ -5,17 +5,21 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
+const { JsonRepository } = require('../src/data/repository');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
 
 const PORT = 4181;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const DB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sig-shortlist-api-'));
 const DB_FILE = path.join(DB_DIR, 'sig-realty-db.json');
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
+let sessionToken = '';
 
 async function waitForServer() {
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${BASE_URL}/api/dashboard`);
+      const response = await fetch(`${BASE_URL}/api/public/properties`);
       if (response.ok) {
         return;
       }
@@ -28,8 +32,9 @@ async function waitForServer() {
 }
 
 async function requestJson(pathname, options = {}) {
+  const authHeaders = options.noAuth ? {} : (sessionToken ? { 'x-session-token': sessionToken } : {});
   const response = await fetch(`${BASE_URL}${pathname}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeaders, ...(options.headers || {}) },
     ...options
   });
   const data = await response.json();
@@ -37,6 +42,7 @@ async function requestJson(pathname, options = {}) {
 }
 
 async function buildFixture() {
+  const repository = new JsonRepository(DB_FILE);
   const lead = await requestJson('/api/leads', {
     method: 'POST',
     body: JSON.stringify({
@@ -45,9 +51,11 @@ async function buildFixture() {
       phone: '+91 9000007001',
       email: 'shortlist.api.lead@example.com',
       leadStatus: 'New',
-      assignedAgentId: 'USR-0001'
+      assignedAgentId: 'USR-0001',
+      ...TENANT
     })
   });
+  repository.update('Leads', 'LeadID', lead.data.data.LeadID, TENANT);
 
   const requirement = await requestJson('/api/requirements', {
     method: 'POST',
@@ -70,9 +78,11 @@ async function buildFixture() {
       possession: 'Ready',
       urgency: 'High',
       specialNotes: 'shortlist api fixture',
-      formType: 'residential'
+      formType: 'residential',
+      ...TENANT
     })
   });
+  repository.update('Requirements', 'RequirementID', requirement.data.data.RequirementID, TENANT);
 
   const property = await requestJson('/api/inventory', {
     method: 'POST',
@@ -91,9 +101,11 @@ async function buildFixture() {
       status: 'Available',
       ownerId: 'OWN-SL-API',
       brokerId: 'BRO-SL-API',
-      builderId: 'BUIL-SL-API'
+      builderId: 'BUIL-SL-API',
+      ...TENANT
     })
   });
+  repository.update('Inventory', 'PropertyID', property.data.data.PropertyID, TENANT);
 
   const run = await requestJson('/api/matching/run', {
     method: 'POST',
@@ -114,13 +126,25 @@ let serverProcess;
 test.before(async () => {
   serverProcess = spawn(process.execPath, ['server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT), SIG_REALTY_DB_FILE: DB_FILE },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      SIG_REALTY_DB_FILE: DB_FILE,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
   serverProcess.stdout.setEncoding('utf8');
   serverProcess.stderr.setEncoding('utf8');
   await waitForServer();
+  sessionToken = await issueTestSession(BASE_URL, DB_FILE, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 });
 
 test.after(async () => {
@@ -209,12 +233,24 @@ test('shortlist API supports add/list/update/remove/re-add/idempotency/restart p
 
   serverProcess = spawn(process.execPath, ['server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT), SIG_REALTY_DB_FILE: DB_FILE },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      SIG_REALTY_DB_FILE: DB_FILE,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   serverProcess.stdout.setEncoding('utf8');
   serverProcess.stderr.setEncoding('utf8');
   await waitForServer();
+  sessionToken = await issueTestSession(BASE_URL, DB_FILE, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   const afterRestart = await requestJson(`/api/shortlist/${beforeRestartId}`);
   assert.equal(afterRestart.response.ok, true);

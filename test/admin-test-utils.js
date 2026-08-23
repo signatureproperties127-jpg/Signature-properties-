@@ -17,6 +17,7 @@ const IDENTITY_HEADERS = new Set([
   'x-brokerage-id',
   'x-brokerageid'
 ]);
+const TEST_SESSION_SECRET = 'sig-realty-test-session-secret';
 const serverAuthContexts = new Map();
 let googleAuthHarnessPromise;
 
@@ -35,6 +36,20 @@ async function ensureGoogleAuthHarness() {
 
 function makeDbFile(prefix = 'sig-admin-test-') {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), prefix)), 'sig-realty-db.json');
+}
+
+function ensureTenantScopedDefaultUsers(dbFile) {
+  const repository = new JsonRepository(dbFile);
+  const tenantUsers = [
+    { UserID: 'USR-0001', CompanyID: 'COMP-001', BrokerageID: 'BRK-001' },
+    { UserID: 'USR-0002', CompanyID: 'COMP-001', BrokerageID: 'BRK-001' },
+    { UserID: 'USR-0003', CompanyID: 'COMP-001', BrokerageID: 'BRK-001' }
+  ];
+  for (const entry of tenantUsers) {
+    const user = repository.getUser(entry.UserID);
+    if (!user) continue;
+    repository.updateUser(entry.UserID, entry, { userId: 'USR-0001', role: 'ADMIN' });
+  }
 }
 
 function findFreePort() {
@@ -60,6 +75,7 @@ function findFreePort() {
 }
 
 async function startServer(dbFile, options = {}) {
+  ensureTenantScopedDefaultUsers(dbFile);
   const port = options.port || await findFreePort();
   const authHarness = await ensureGoogleAuthHarness();
   const child = spawn(process.execPath, ['server.js'], {
@@ -68,6 +84,8 @@ async function startServer(dbFile, options = {}) {
       ...process.env,
       PORT: String(port),
       SIG_REALTY_DB_FILE: dbFile,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET,
       GOOGLE_CLIENT_ID: authHarness.clientId,
       GOOGLE_JWKS_URL: authHarness.jwksUrl,
       ...(options.env || {})
@@ -86,7 +104,7 @@ async function startServer(dbFile, options = {}) {
     try {
       const response = await fetch(`${baseUrl}/api/public/properties`);
       if (response.ok) {
-        serverAuthContexts.set(baseUrl, { ...authHarness, dbFile, cookies: new Map() });
+        serverAuthContexts.set(baseUrl, { ...authHarness, dbFile, tokens: new Map() });
         return { child, baseUrl, port };
       }
     } catch (_) {
@@ -122,6 +140,47 @@ function lookupUserByIdentity(dbFile, headers = {}) {
   return null;
 }
 
+function normalizePermissions(value, fallback = []) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    return value.split(',').map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  return fallback;
+}
+
+async function issueSessionToken(baseUrl, user = {}, headers = {}) {
+  const context = serverAuthContexts.get(baseUrl);
+  if (!context) return '';
+  const repository = new JsonRepository(context.dbFile);
+  const companyId = String(headers['x-company-id'] || headers['x-companyid'] || user.CompanyID || 'COMP-001').trim();
+  const brokerageId = String(headers['x-brokerage-id'] || headers['x-brokerageid'] || user.BrokerageID || 'BRK-001').trim();
+  const role = String(headers['x-user-role'] || user.Role || 'AGENT').trim().toUpperCase();
+  const permissions = normalizePermissions(headers['x-user-permissions'] || user.Permissions, user.Permissions || []);
+  repository.updateUser('USR-0001', {
+    Role: role,
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    Permissions: permissions
+  }, { userId: 'USR-0001', role: 'ADMIN' });
+
+  const cacheKey = JSON.stringify({ role, companyId, brokerageId, permissions });
+  if (context.tokens.has(cacheKey)) {
+    return context.tokens.get(cacheKey);
+  }
+
+  const response = await fetch(`${baseUrl}/api/auth/test-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: TEST_SESSION_SECRET, userId: 'USR-0001' })
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload?.ok || !payload?.data?.token) {
+    throw new Error(`Unable to issue test session token: ${payload?.error || response.status}`);
+  }
+  context.tokens.set(cacheKey, payload.data.token);
+  return payload.data.token;
+}
+
 async function resolveSessionHeaders(baseUrl, headers = {}) {
   const context = serverAuthContexts.get(baseUrl);
   if (!context) return headers;
@@ -130,25 +189,11 @@ async function resolveSessionHeaders(baseUrl, headers = {}) {
   if (!identityHeaderNames.length) return headers;
 
   const user = lookupUserByIdentity(context.dbFile, headers);
-  if (!user || !user.Email) {
+  if (!user) {
     throw new Error(`Unable to resolve authenticated test user for ${identityHeaderNames.join(', ')}`);
   }
 
-  let cookie = context.cookies.get(user.UserID);
-  if (!cookie) {
-    const signIn = await signInWithGoogle(baseUrl, {
-      privateKey: context.privateKey,
-      clientId: context.clientId,
-      kid: context.kid,
-      email: user.Email,
-      sub: user.UserID
-    });
-    if (!signIn.response.ok || !signIn.payload?.ok) {
-      throw new Error(`Google sign-in failed for ${user.Email}: ${signIn.payload?.error || signIn.response.status}`);
-    }
-    cookie = signIn.setCookie;
-    context.cookies.set(user.UserID, cookie);
-  }
+  const token = await issueSessionToken(baseUrl, user, headers);
 
   const nextHeaders = {};
   for (const [name, value] of Object.entries(headers)) {
@@ -156,7 +201,7 @@ async function resolveSessionHeaders(baseUrl, headers = {}) {
       nextHeaders[name] = value;
     }
   }
-  nextHeaders.cookie = cookie;
+  nextHeaders['x-session-token'] = token;
   return nextHeaders;
 }
 

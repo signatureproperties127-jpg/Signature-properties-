@@ -5,16 +5,19 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
 
 const PORT = 4186;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-followup-api-')), 'sig-realty-db.json');
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
+let sessionToken = '';
 
 async function waitForServer() {
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${BASE_URL}/api/dashboard`);
+      const response = await fetch(`${BASE_URL}/api/public/properties`);
       if (response.ok) return;
     } catch (error) {
       await delay(200);
@@ -24,8 +27,9 @@ async function waitForServer() {
 }
 
 async function requestJson(pathname, options = {}) {
+  const authHeaders = options.noAuth ? {} : (sessionToken ? { 'x-session-token': sessionToken } : {});
   const response = await fetch(`${BASE_URL}${pathname}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeaders, ...(options.headers || {}) },
     ...options
   });
   const data = await response.json();
@@ -37,13 +41,25 @@ let serverProcess;
 test.before(async () => {
   serverProcess = spawn(process.execPath, ['server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT), SIG_REALTY_DB_FILE: DB_FILE },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      SIG_REALTY_DB_FILE: DB_FILE,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
   serverProcess.stdout.setEncoding('utf8');
   serverProcess.stderr.setEncoding('utf8');
   await waitForServer();
+  sessionToken = await issueTestSession(BASE_URL, DB_FILE, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 });
 
 test.after(async () => {
@@ -65,7 +81,8 @@ test('follow-up API creates and lists follow-ups for a lead', async () => {
       priority: 'High',
       status: 'PENDING',
       notes: 'Follow-up test note',
-      assignedUser: 'USR-0001'
+      assignedUser: 'USR-0001',
+      ...TENANT
     })
   });
 

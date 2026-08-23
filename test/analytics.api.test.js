@@ -6,6 +6,29 @@ const path = require('node:path');
 const http = require('node:http');
 const { once } = require('node:events');
 const { spawn } = require('node:child_process');
+const { JsonRepository } = require('../src/data/repository');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
+
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
+const nativeFetch = global.fetch;
+let sessionToken = '';
+
+global.fetch = async (resource, options = {}) => {
+  const requestUrl = String(resource || '');
+  const shouldAttachSession = sessionToken
+    && requestUrl.includes('/api/')
+    && !requestUrl.includes('/api/public/')
+    && !requestUrl.includes('/api/auth/test-session');
+  if (!shouldAttachSession) {
+    return nativeFetch(resource, options);
+  }
+  const headers = { ...(options.headers || {}) };
+  const hasSession = Object.keys(headers).some((key) => key.toLowerCase() === 'x-session-token');
+  if (!hasSession) {
+    headers['x-session-token'] = sessionToken;
+  }
+  return nativeFetch(resource, { ...options, headers });
+};
 
 function makeDbFile() {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-analytics-api-')), 'sig-realty-db.json');
@@ -26,7 +49,13 @@ async function startServer(dbPath) {
   const port = await findFreePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
-    env: { ...process.env, PORT: String(port), SIG_REALTY_DB_FILE: dbPath },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SIG_REALTY_DB_FILE: dbPath,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -35,7 +64,7 @@ async function startServer(dbPath) {
   while (Date.now() < timeout) {
     if (child.exitCode !== null) break;
     try {
-      const res = await fetch(`${baseUrl}/api/dashboard`);
+      const res = await fetch(`${baseUrl}/api/public/properties`);
       if (res.ok) return { child, baseUrl };
     } catch (_) {
       // retry
@@ -61,10 +90,12 @@ async function post(baseUrl, route, payload) {
     body: JSON.stringify(payload)
   });
   assert.equal(res.status, 200);
-  return res.json();
+  const body = await res.json();
+  return body;
 }
 
-async function seed(baseUrl) {
+async function seed(baseUrl, dbPath) {
+  const repository = new JsonRepository(dbPath);
   const lead = await post(baseUrl, '/api/leads', {
     clientName: 'Analytics API Lead',
     city: 'Bengaluru',
@@ -74,6 +105,7 @@ async function seed(baseUrl) {
     assignedAgentId: 'USR-8201',
     leadSource: 'Housing'
   });
+  repository.update('Leads', 'LeadID', lead.data.LeadID, TENANT);
 
   const requirement = await post(baseUrl, '/api/requirements', {
     leadId: lead.data.LeadID,
@@ -95,6 +127,7 @@ async function seed(baseUrl) {
     urgency: 'High',
     formType: 'residential'
   });
+  repository.update('Requirements', 'RequirementID', requirement.data.RequirementID, TENANT);
 
   const property = await post(baseUrl, '/api/inventory', {
     transactionType: 'Sale',
@@ -111,6 +144,7 @@ async function seed(baseUrl) {
     status: 'Available',
     builderId: 'BLD-AAPI-1'
   });
+  repository.update('Inventory', 'PropertyID', property.data.PropertyID, TENANT);
 
   const matching = await post(baseUrl, '/api/matching/run', { requirementId: requirement.data.RequirementID });
   const match = matching.data.matches.find((item) => item.PropertyID === property.data.PropertyID);
@@ -204,9 +238,15 @@ async function seed(baseUrl) {
 test('analytics API endpoints return expected shapes and values', async () => {
   const dbPath = makeDbFile();
   const { child, baseUrl } = await startServer(dbPath);
+  sessionToken = await issueTestSession(baseUrl, dbPath, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
-    await seed(baseUrl);
+    await seed(baseUrl, dbPath);
 
     const routes = [
       '/api/reports/requirements?datePreset=thisyear',

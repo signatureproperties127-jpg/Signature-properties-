@@ -6,11 +6,15 @@ const path = require('node:path');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
+const { JsonRepository } = require('../src/data/repository');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
 
 const DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-negotiation-api-')), 'sig-realty-db.json');
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
 let PORT = 0;
 let BASE_URL = '';
 let serverProcess;
+let sessionToken = '';
 
 async function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -36,7 +40,7 @@ async function waitForServer() {
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/api/dashboard`, { signal: AbortSignal.timeout(2000) });
+      const response = await fetch(`${BASE_URL}/api/public/properties`, { signal: AbortSignal.timeout(2000) });
       if (response.ok) {
         return;
       }
@@ -49,8 +53,9 @@ async function waitForServer() {
 }
 
 async function requestJson(pathname, options = {}) {
+  const authHeaders = options.noAuth ? {} : (sessionToken ? { 'x-session-token': sessionToken } : {});
   const response = await fetch(`${BASE_URL}${pathname}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeaders, ...(options.headers || {}) },
     signal: AbortSignal.timeout(5000),
     ...options
   });
@@ -60,6 +65,7 @@ async function requestJson(pathname, options = {}) {
 }
 
 async function buildFixture() {
+  const repository = new JsonRepository(DB_FILE);
   const lead = await requestJson('/api/leads', {
     method: 'POST',
     body: JSON.stringify({
@@ -68,10 +74,12 @@ async function buildFixture() {
       phone: '+91 9000010001',
       email: 'negotiation.api.lead@example.com',
       leadStatus: 'New',
-      assignedAgentId: 'USR-0001'
+      assignedAgentId: 'USR-0001',
+      ...TENANT
     })
   });
   assert.equal(lead.response.ok, true);
+  repository.update('Leads', 'LeadID', lead.body.data.LeadID, TENANT);
 
   const requirement = await requestJson('/api/requirements', {
     method: 'POST',
@@ -94,10 +102,12 @@ async function buildFixture() {
       possession: 'Ready',
       urgency: 'High',
       specialNotes: 'Negotiation API fixture',
-      formType: 'residential'
+      formType: 'residential',
+      ...TENANT
     })
   });
   assert.equal(requirement.response.ok, true);
+  repository.update('Requirements', 'RequirementID', requirement.body.data.RequirementID, TENANT);
 
   const inventory = await requestJson('/api/inventory', {
     method: 'POST',
@@ -116,10 +126,12 @@ async function buildFixture() {
       status: 'Available',
       ownerId: 'OWN-NEG-API',
       brokerId: 'BRO-NEG-API',
-      builderId: 'BUIL-NEG-API'
+      builderId: 'BUIL-NEG-API',
+      ...TENANT
     })
   });
   assert.equal(inventory.response.ok, true);
+  repository.update('Inventory', 'PropertyID', inventory.body.data.PropertyID, TENANT);
 
   const run = await requestJson('/api/matching/run', {
     method: 'POST',
@@ -177,7 +189,13 @@ test.before(async () => {
 
   serverProcess = spawn(process.execPath, ['server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT), SIG_REALTY_DB_FILE: DB_FILE },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      SIG_REALTY_DB_FILE: DB_FILE,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -185,6 +203,12 @@ test.before(async () => {
   serverProcess.stderr.setEncoding('utf8');
 
   await waitForServer();
+  sessionToken = await issueTestSession(BASE_URL, DB_FILE, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 });
 
 test.after(async () => {
@@ -316,12 +340,24 @@ test('negotiation API supports create/read/update/actions/history and restart pe
   BASE_URL = `http://127.0.0.1:${PORT}`;
   serverProcess = spawn(process.execPath, ['server.js'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT), SIG_REALTY_DB_FILE: DB_FILE },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      SIG_REALTY_DB_FILE: DB_FILE,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   serverProcess.stdout.setEncoding('utf8');
   serverProcess.stderr.setEncoding('utf8');
   await waitForServer();
+  sessionToken = await issueTestSession(BASE_URL, DB_FILE, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   const afterRestart = await requestJson(`/api/negotiations/${negotiationId}`);
   assert.equal(afterRestart.response.ok, true);

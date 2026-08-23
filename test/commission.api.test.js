@@ -6,6 +6,26 @@ const path = require('node:path');
 const http = require('node:http');
 const { once } = require('node:events');
 const { spawn } = require('node:child_process');
+const { JsonRepository } = require('../src/data/repository');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
+
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
+const nativeFetch = global.fetch;
+let sessionToken = '';
+
+global.fetch = async (resource, options = {}) => {
+  const requestUrl = String(resource || '');
+  const shouldAttachSession = sessionToken
+    && requestUrl.includes('/api/')
+    && !requestUrl.includes('/api/public/')
+    && !requestUrl.includes('/api/auth/test-session');
+  if (!shouldAttachSession) return nativeFetch(resource, options);
+  const headers = { ...(options.headers || {}) };
+  if (!Object.keys(headers).some((key) => key.toLowerCase() === 'x-session-token')) {
+    headers['x-session-token'] = sessionToken;
+  }
+  return nativeFetch(resource, { ...options, headers });
+};
 
 function makeDbFile() {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-commission-api-')), 'sig-realty-db.json');
@@ -26,7 +46,13 @@ async function startServer(dbPath) {
   const port = await findFreePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
-    env: { ...process.env, PORT: String(port), SIG_REALTY_DB_FILE: dbPath },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SIG_REALTY_DB_FILE: dbPath,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -39,7 +65,7 @@ async function startServer(dbPath) {
   while (Date.now() < timeout) {
     if (child.exitCode !== null) break;
     try {
-      const res = await fetch(`${baseUrl}/api/dashboard`);
+      const res = await fetch(`${baseUrl}/api/public/properties`);
       if (res.ok) return { child, baseUrl };
     } catch (_) {
       // keep retrying until timeout
@@ -58,7 +84,8 @@ async function stopServer(child) {
   await once(child, 'exit');
 }
 
-async function createDealViaApi(baseUrl, suffix = 'CA01') {
+async function createDealViaApi(baseUrl, dbPath, suffix = 'CA01') {
+  const repository = new JsonRepository(dbPath);
   const leadRes = await fetch(`${baseUrl}/api/leads`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -73,6 +100,7 @@ async function createDealViaApi(baseUrl, suffix = 'CA01') {
   });
   assert.equal(leadRes.status, 200);
   const lead = await leadRes.json();
+  repository.update('Leads', 'LeadID', lead.data.LeadID, TENANT);
 
   const reqRes = await fetch(`${baseUrl}/api/leads/${lead.data.LeadID}/requirements`, {
     method: 'POST',
@@ -100,6 +128,7 @@ async function createDealViaApi(baseUrl, suffix = 'CA01') {
   });
   assert.equal(reqRes.status, 200);
   const requirement = await reqRes.json();
+  repository.update('Requirements', 'RequirementID', requirement.data.RequirementID, TENANT);
 
   const invRes = await fetch(`${baseUrl}/api/inventory`, {
     method: 'POST',
@@ -121,6 +150,7 @@ async function createDealViaApi(baseUrl, suffix = 'CA01') {
   });
   assert.equal(invRes.status, 200);
   const property = await invRes.json();
+  repository.update('Inventory', 'PropertyID', property.data.PropertyID, TENANT);
 
   const matchRes = await fetch(`${baseUrl}/api/matching/run`, {
     method: 'POST',
@@ -189,9 +219,15 @@ async function createDealViaApi(baseUrl, suffix = 'CA01') {
 test('commission API supports calculate/create/list/summary/history/payment/status', async () => {
   const dbPath = makeDbFile();
   const { child, baseUrl } = await startServer(dbPath);
+  sessionToken = await issueTestSession(baseUrl, dbPath, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
-    const fixture = await createDealViaApi(baseUrl, 'CA11');
+    const fixture = await createDealViaApi(baseUrl, dbPath, 'CA11');
 
     const calcRes = await fetch(`${baseUrl}/api/commission/calculate`, {
       method: 'POST',
@@ -289,6 +325,12 @@ test('commission API supports calculate/create/list/summary/history/payment/stat
 test('commission API validates missing data and returns 404 for unknown commission', async () => {
   const dbPath = makeDbFile();
   const { child, baseUrl } = await startServer(dbPath);
+  sessionToken = await issueTestSession(baseUrl, dbPath, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
     const badCreateRes = await fetch(`${baseUrl}/api/commission`, {
@@ -313,7 +355,7 @@ test('commission API validates missing data and returns 404 for unknown commissi
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ Amount: 1000, PaymentMode: 'UPI' })
     });
-    assert.equal(paymentNotFound.status, 400);
+    assert.equal(paymentNotFound.status, 404);
   } finally {
     await stopServer(child);
     fs.unlinkSync(dbPath);

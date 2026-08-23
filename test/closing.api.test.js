@@ -6,6 +6,26 @@ const path = require('node:path');
 const http = require('node:http');
 const { once } = require('node:events');
 const { spawn } = require('node:child_process');
+const { JsonRepository } = require('../src/data/repository');
+const { TEST_SESSION_SECRET, issueTestSession } = require('./session-test-utils');
+
+const TENANT = { CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' };
+const nativeFetch = global.fetch;
+let sessionToken = '';
+
+global.fetch = async (resource, options = {}) => {
+  const requestUrl = String(resource || '');
+  const shouldAttachSession = sessionToken
+    && requestUrl.includes('/api/')
+    && !requestUrl.includes('/api/public/')
+    && !requestUrl.includes('/api/auth/test-session');
+  if (!shouldAttachSession) return nativeFetch(resource, options);
+  const headers = { ...(options.headers || {}) };
+  if (!Object.keys(headers).some((key) => key.toLowerCase() === 'x-session-token')) {
+    headers['x-session-token'] = sessionToken;
+  }
+  return nativeFetch(resource, { ...options, headers });
+};
 
 function makeDbFile() {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sig-closing-api-')), 'sig-realty-db.json');
@@ -26,7 +46,13 @@ async function startServer(dbPath) {
   const port = await findFreePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
-    env: { ...process.env, PORT: String(port), SIG_REALTY_DB_FILE: dbPath },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      SIG_REALTY_DB_FILE: dbPath,
+      NODE_ENV: 'test',
+      SIG_REALTY_TEST_SESSION_TOKEN: TEST_SESSION_SECRET
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -39,7 +65,7 @@ async function startServer(dbPath) {
   while (Date.now() < timeout) {
     if (child.exitCode !== null) break;
     try {
-      const res = await fetch(`${baseUrl}/api/dashboard`);
+      const res = await fetch(`${baseUrl}/api/public/properties`);
       if (res.ok) return { child, baseUrl };
     } catch (_) {
       // keep retrying until timeout
@@ -58,7 +84,8 @@ async function stopServer(child) {
   await once(child, 'exit');
 }
 
-async function createCommissionDeal(baseUrl, suffix = 'CLA01') {
+async function createCommissionDeal(baseUrl, dbPath, suffix = 'CLA01') {
+  const repository = new JsonRepository(dbPath);
   const leadRes = await fetch(`${baseUrl}/api/leads`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -73,6 +100,7 @@ async function createCommissionDeal(baseUrl, suffix = 'CLA01') {
   });
   assert.equal(leadRes.status, 200);
   const lead = await leadRes.json();
+  repository.update('Leads', 'LeadID', lead.data.LeadID, TENANT);
 
   const reqRes = await fetch(`${baseUrl}/api/leads/${lead.data.LeadID}/requirements`, {
     method: 'POST',
@@ -100,6 +128,7 @@ async function createCommissionDeal(baseUrl, suffix = 'CLA01') {
   });
   assert.equal(reqRes.status, 200);
   const requirement = await reqRes.json();
+  repository.update('Requirements', 'RequirementID', requirement.data.RequirementID, TENANT);
 
   const invRes = await fetch(`${baseUrl}/api/inventory`, {
     method: 'POST',
@@ -121,6 +150,7 @@ async function createCommissionDeal(baseUrl, suffix = 'CLA01') {
   });
   assert.equal(invRes.status, 200);
   const property = await invRes.json();
+  repository.update('Inventory', 'PropertyID', property.data.PropertyID, TENANT);
 
   const matchRes = await fetch(`${baseUrl}/api/matching/run`, {
     method: 'POST',
@@ -206,9 +236,15 @@ async function createCommissionDeal(baseUrl, suffix = 'CLA01') {
 test('closing API supports start/checklist/history/complete/close lifecycle', async () => {
   const dbPath = makeDbFile();
   const { child, baseUrl } = await startServer(dbPath);
+  sessionToken = await issueTestSession(baseUrl, dbPath, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
-    const fixture = await createCommissionDeal(baseUrl, 'CLA11');
+    const fixture = await createCommissionDeal(baseUrl, dbPath, 'CLA11');
 
     const startRes = await fetch(`${baseUrl}/api/closing/${fixture.deal.data.DealID}/start`, {
       method: 'POST',
@@ -293,6 +329,12 @@ test('closing API supports start/checklist/history/complete/close lifecycle', as
 test('closing API validates state and returns expected codes for unknown deals', async () => {
   const dbPath = makeDbFile();
   const { child, baseUrl } = await startServer(dbPath);
+  sessionToken = await issueTestSession(baseUrl, dbPath, {
+    role: 'ADMIN',
+    companyId: 'COMP-0001',
+    brokerageId: 'BRO-0001',
+    permissions: ['*']
+  });
 
   try {
     const getMissing = await fetch(`${baseUrl}/api/closing/DEAL-999999`);
