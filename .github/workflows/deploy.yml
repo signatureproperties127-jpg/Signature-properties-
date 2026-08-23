@@ -184,6 +184,24 @@ jobs:
           expect_http_status GET /api/matching 401
 
           echo "Deployed SHA: $AFTER_SHA"
+
+          # --- READ-ONLY PRODUCTION AUDIT (no modifications) ---
+          echo "=== AUDIT: host ==="
+          hostname -f || true
+          hostname || true
+          echo "=== AUDIT: timestamp ==="
+          date --iso-8601=seconds || true
+          echo "=== AUDIT: working directory ==="
+          pwd || true
+          echo "=== AUDIT: service status ==="
+          systemctl is-active signature-realty || true
+          echo "=== AUDIT: port 4173 ==="
+          sudo ss -ltnp | grep -F ':4173' || true
+          echo "=== AUDIT: systemctl status ==="
+          sudo systemctl status signature-realty --no-pager || true
+          echo "=== AUDIT: git log ==="
+          git -C ~/signature-properties log --oneline -5 || true
+          echo "=== AUDIT END ==="
           ENDSSH
 
       - name: Clean up SSH key
