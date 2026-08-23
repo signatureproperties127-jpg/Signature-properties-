@@ -116,6 +116,189 @@ function stampRequirementTenant(dbFile, requirementId, companyId, brokerageId) {
   fs.writeFileSync(dbFile, JSON.stringify(raw, null, 2));
 }
 
+function seedP0OperationalGraph(dbFile, { companyId, brokerageId, tag }) {
+  const now = new Date().toISOString();
+  const raw = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+  const leadId = `LEAD-${tag}`;
+  const requirementId = `REQ-${tag}`;
+  const propertyId = `PROP-${tag}`;
+  const matchId = `MATCH-${tag}`;
+  const shortlistId = `SL-${tag}`;
+  const visitId = `VISIT-${tag}`;
+  const negotiationId = `NEG-${tag}`;
+  const tokenId = `TOK-${tag}`;
+  const dealId = `DEAL-${tag}`;
+  const commissionId = `COM-${tag}`;
+  const closingId = `CLS-${tag}`;
+  const ownerId = `OWN-${tag}`;
+  const builderId = `BLD-${tag}`;
+  const projectId = `PRJ-${tag}`;
+
+  raw.Leads.push({
+    LeadID: leadId,
+    ClientName: `Client ${tag}`,
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    AssignedAgentID: 'USR-TENANT-A',
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Requirements.push({
+    RequirementID: requirementId,
+    LeadID: leadId,
+    TransactionID: 'TXN-0001',
+    Category: 'Residential',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Inventory.push({
+    PropertyID: propertyId,
+    Project: `Project ${tag}`,
+    Category: 'Residential',
+    TransactionType: 'Purchase',
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Matches.push({
+    MatchID: matchId,
+    RequirementID: requirementId,
+    PropertyID: propertyId,
+    Score: 95,
+    MatchLevel: 'High',
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Shortlists.push({
+    ShortlistID: shortlistId,
+    RequirementID: requirementId,
+    LeadID: leadId,
+    PropertyID: propertyId,
+    MatchID: matchId,
+    Status: 'Active',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.SiteVisits.push({
+    VisitID: visitId,
+    LeadID: leadId,
+    RequirementID: requirementId,
+    PropertyID: propertyId,
+    MatchID: matchId,
+    VisitDate: '2026-08-01',
+    VisitTime: '11:00',
+    Status: 'Scheduled',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Negotiations.push({
+    NegotiationID: negotiationId,
+    LeadID: leadId,
+    RequirementID: requirementId,
+    PropertyID: propertyId,
+    TransactionID: 'TXN-0001',
+    Status: 'OPEN',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Tokens.push({
+    TokenID: tokenId,
+    NegotiationID: negotiationId,
+    LeadID: leadId,
+    RequirementID: requirementId,
+    PropertyID: propertyId,
+    TokenAmount: 100000,
+    PaidAmount: 10000,
+    PendingAmount: 90000,
+    Status: 'PENDING',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Deals.push({
+    DealID: dealId,
+    LeadID: leadId,
+    RequirementID: requirementId,
+    PropertyID: propertyId,
+    NegotiationID: negotiationId,
+    TokenID: tokenId,
+    FinalPrice: 5000000,
+    Brokerage: 50000,
+    Status: 'OPEN',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Commission.push({
+    CommissionID: commissionId,
+    DealID: dealId,
+    LeadID: leadId,
+    RequirementID: requirementId,
+    PropertyID: propertyId,
+    Status: 'PENDING',
+    GrossCommission: 50000,
+    ReceivedAmount: 0,
+    PendingAmount: 50000,
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Closings.push({
+    ClosingID: closingId,
+    DealID: dealId,
+    LeadID: leadId,
+    RequirementID: requirementId,
+    PropertyID: propertyId,
+    Status: 'IN_PROGRESS',
+    Checklist: [
+      { ItemKey: 'TOKEN_VERIFIED', Label: 'TOKEN VERIFIED', Status: 'PENDING', CompletedBy: null, CompletedAt: null, Notes: '' },
+      { ItemKey: 'AGREEMENT_COMPLETED', Label: 'AGREEMENT COMPLETED', Status: 'PENDING', CompletedBy: null, CompletedAt: null, Notes: '' }
+    ],
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Owners.push({
+    OwnerID: ownerId,
+    Name: `Owner ${tag}`,
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Builders.push({
+    BuilderID: builderId,
+    Name: `Builder ${tag}`,
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Projects.push({
+    ProjectID: projectId,
+    BuilderID: builderId,
+    ProjectName: `Project ${tag}`,
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+
+  fs.writeFileSync(dbFile, JSON.stringify(raw, null, 2));
+  return { leadId, requirementId, propertyId, matchId, shortlistId, visitId, negotiationId, tokenId, dealId, commissionId, ownerId, builderId, projectId };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // P0/P1 — Unauthenticated 401 gate tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -450,6 +633,165 @@ test('P1-6: same-tenant DELETE /api/requirements/:id succeeds', async () => {
       method: 'POST',
       headers: tenantAHeaders,
       body: { ClientName: 'Del Client 2', City: 'Chennai', Phone: '9000000006', Email: 'del2@example.com' }
+    });
+
+    test('P0: unauthenticated operational and master routes return 401', async () => {
+      const dbFile = makeTenantDb();
+      const server = await startServer(dbFile);
+      try {
+        const cases = [
+          ['GET', '/api/site-visits'],
+          ['POST', '/api/site-visits'],
+          ['PATCH', '/api/site-visits/VISIT-X/confirm'],
+          ['GET', '/api/shortlist'],
+          ['POST', '/api/shortlist'],
+          ['PATCH', '/api/shortlist/SL-X'],
+          ['GET', '/api/negotiations'],
+          ['POST', '/api/negotiations'],
+          ['POST', '/api/negotiations/NEG-X/offer'],
+          ['GET', '/api/tokens'],
+          ['POST', '/api/tokens'],
+          ['GET', '/api/deals'],
+          ['POST', '/api/deals'],
+          ['GET', '/api/commission'],
+          ['POST', '/api/commission'],
+          ['POST', '/api/commission/calculate'],
+          ['PATCH', '/api/commission/COM-X/status'],
+          ['GET', '/api/closing/DEAL-X/history'],
+          ['PATCH', '/api/closing/DEAL-X/checklist'],
+          ['GET', '/api/owners'],
+          ['POST', '/api/owners'],
+          ['GET', '/api/builders'],
+          ['POST', '/api/builders'],
+          ['GET', '/api/projects'],
+          ['POST', '/api/projects']
+        ];
+        for (const [method, route] of cases) {
+          const res = await requestJson(server.baseUrl, route, { method, body: method === 'GET' ? undefined : {} });
+          assert.equal(res.response.status, 401, `${method} ${route} must return 401`);
+        }
+      } finally {
+        await stopServer(server.child);
+      }
+    });
+
+    test('P0: authenticated same-tenant routes remain accessible', async () => {
+      const dbFile = makeTenantDb();
+      const ids = seedP0OperationalGraph(dbFile, { companyId: 'COMP-AAA', brokerageId: 'BRK-AAA', tag: 'A' });
+      const server = await startServer(dbFile);
+      try {
+        const listRoutes = ['/api/site-visits', '/api/shortlist', '/api/negotiations', '/api/tokens', '/api/deals', '/api/commission', '/api/owners', '/api/builders', '/api/projects'];
+        for (const route of listRoutes) {
+          const res = await requestJson(server.baseUrl, route, { headers: tenantAHeaders });
+          assert.equal(res.response.status, 200, `Authenticated GET ${route} must be accessible`);
+          assert.equal(res.payload.ok, true);
+        }
+
+        const siteVisitConfirm = await requestJson(server.baseUrl, `/api/site-visits/${ids.visitId}/confirm`, {
+          method: 'PATCH',
+          headers: tenantAHeaders,
+          body: {}
+        });
+        assert.equal(siteVisitConfirm.response.status, 200);
+        assert.equal(siteVisitConfirm.payload.ok, true);
+
+        const negotiationOffer = await requestJson(server.baseUrl, `/api/negotiations/${ids.negotiationId}/offer`, {
+          method: 'POST',
+          headers: tenantAHeaders,
+          body: { CurrentOffer: 4500000 }
+        });
+        assert.equal(negotiationOffer.response.status, 200);
+        assert.equal(negotiationOffer.payload.ok, true);
+
+        const commissionStatus = await requestJson(server.baseUrl, `/api/commission/${ids.commissionId}/status`, {
+          method: 'PATCH',
+          headers: tenantAHeaders,
+          body: { Status: 'PARTIAL' }
+        });
+        assert.equal(commissionStatus.response.status, 200);
+        assert.equal(commissionStatus.payload.ok, true);
+
+        const closingChecklist = await requestJson(server.baseUrl, `/api/closing/${ids.dealId}/checklist`, {
+          method: 'PATCH',
+          headers: tenantAHeaders,
+          body: { ItemKey: 'TOKEN_VERIFIED', Status: 'COMPLETED' }
+        });
+        assert.equal(closingChecklist.response.status, 200);
+        assert.equal(closingChecklist.payload.ok, true);
+      } finally {
+        await stopServer(server.child);
+      }
+    });
+
+    test('P0: cross-tenant access is rejected with 403 for tenant-sensitive operations', async () => {
+      const dbFile = makeTenantDb();
+      const ids = seedP0OperationalGraph(dbFile, { companyId: 'COMP-AAA', brokerageId: 'BRK-AAA', tag: 'A' });
+      seedP0OperationalGraph(dbFile, { companyId: 'COMP-BBB', brokerageId: 'BRK-BBB', tag: 'B' });
+      const server = await startServer(dbFile);
+      try {
+        const crossVisit = await requestJson(server.baseUrl, `/api/site-visits/${ids.visitId}/confirm`, {
+          method: 'PATCH',
+          headers: tenantBHeaders,
+          body: {}
+        });
+        assert.equal(crossVisit.response.status, 403);
+
+        const crossShortlist = await requestJson(server.baseUrl, `/api/shortlist/${ids.shortlistId}`, {
+          method: 'PATCH',
+          headers: tenantBHeaders,
+          body: { Notes: 'cross tenant attempt' }
+        });
+        assert.equal(crossShortlist.response.status, 403);
+
+        const crossNegotiation = await requestJson(server.baseUrl, `/api/negotiations/${ids.negotiationId}/offer`, {
+          method: 'POST',
+          headers: tenantBHeaders,
+          body: { CurrentOffer: 4600000 }
+        });
+        assert.equal(crossNegotiation.response.status, 403);
+
+        const crossTokenCreate = await requestJson(server.baseUrl, '/api/tokens', {
+          method: 'POST',
+          headers: tenantBHeaders,
+          body: { LeadID: ids.leadId, RequirementID: ids.requirementId, PropertyID: ids.propertyId, NegotiationID: ids.negotiationId, TokenAmount: 250000 }
+        });
+        assert.equal(crossTokenCreate.response.status, 403);
+
+        const crossDealCreate = await requestJson(server.baseUrl, '/api/deals', {
+          method: 'POST',
+          headers: tenantBHeaders,
+          body: { LeadID: ids.leadId, RequirementID: ids.requirementId, PropertyID: ids.propertyId, NegotiationID: ids.negotiationId, TokenID: ids.tokenId, FinalPrice: 5100000 }
+        });
+        assert.equal(crossDealCreate.response.status, 403);
+
+        const crossCommissionStatus = await requestJson(server.baseUrl, `/api/commission/${ids.commissionId}/status`, {
+          method: 'PATCH',
+          headers: tenantBHeaders,
+          body: { Status: 'PARTIAL' }
+        });
+        assert.equal(crossCommissionStatus.response.status, 403);
+
+        const crossClosing = await requestJson(server.baseUrl, `/api/closing/${ids.dealId}/checklist`, {
+          method: 'PATCH',
+          headers: tenantBHeaders,
+          body: { ItemKey: 'TOKEN_VERIFIED', Status: 'COMPLETED' }
+        });
+        assert.equal(crossClosing.response.status, 403);
+
+        const owners = await requestJson(server.baseUrl, '/api/owners', { headers: tenantBHeaders });
+        assert.equal(owners.response.status, 200);
+        assert.equal((owners.payload.data || []).some((row) => row.OwnerID === ids.ownerId), false);
+
+        const builders = await requestJson(server.baseUrl, '/api/builders', { headers: tenantBHeaders });
+        assert.equal(builders.response.status, 200);
+        assert.equal((builders.payload.data || []).some((row) => row.BuilderID === ids.builderId), false);
+
+        const projects = await requestJson(server.baseUrl, '/api/projects', { headers: tenantBHeaders });
+        assert.equal(projects.response.status, 200);
+        assert.equal((projects.payload.data || []).some((row) => row.ProjectID === ids.projectId), false);
+      } finally {
+        await stopServer(server.child);
+      }
     });
     assert.equal(leadRes.response.status, 200);
     const leadId = leadRes.payload.data?.LeadID || leadRes.payload.LeadID;

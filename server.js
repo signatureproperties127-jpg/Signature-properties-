@@ -167,6 +167,88 @@ function tenantCheck(record = {}, actor = {}) {
   return { ok: true };
 }
 
+function resolveTenantScopedRecord(record = {}) {
+  if (!record || typeof record !== 'object') return null;
+  if (record.CompanyID || record.BrokerageID) {
+    return { CompanyID: record.CompanyID || null, BrokerageID: record.BrokerageID || null };
+  }
+
+  const leadId = record.LeadID || record.leadId;
+  if (leadId) {
+    const lead = runtime.repository.readLead(leadId);
+    if (lead) return resolveTenantScopedRecord(lead);
+  }
+
+  const requirementId = record.RequirementID || record.requirementId;
+  if (requirementId) {
+    const requirement = runtime.repository.readRequirement(requirementId);
+    if (requirement) return resolveTenantScopedRecord(requirement);
+  }
+
+  const dealId = record.DealID || record.dealId;
+  if (dealId) {
+    const deal = runtime.repository.getDeal(dealId);
+    if (deal) return resolveTenantScopedRecord(deal);
+  }
+
+  const negotiationId = record.NegotiationID || record.negotiationId;
+  if (negotiationId) {
+    const negotiation = runtime.repository.getNegotiation(negotiationId);
+    if (negotiation) return resolveTenantScopedRecord(negotiation);
+  }
+
+  const tokenId = record.TokenID || record.tokenId;
+  if (tokenId) {
+    const token = runtime.repository.getToken(tokenId);
+    if (token) return resolveTenantScopedRecord(token);
+  }
+
+  const shortlistId = record.ShortlistID || record.shortlistId;
+  if (shortlistId) {
+    const shortlist = runtime.repository.getShortlist(shortlistId);
+    if (shortlist) return resolveTenantScopedRecord(shortlist);
+  }
+
+  const visitId = record.VisitID || record.visitId || record.SiteVisitID || record.siteVisitId;
+  if (visitId) {
+    const visit = runtime.repository.getSiteVisit(visitId);
+    if (visit?.ok && visit.data) return resolveTenantScopedRecord(visit.data);
+  }
+
+  return null;
+}
+
+function enforceTenantScope(record = {}, actor = {}) {
+  const resolved = resolveTenantScopedRecord(record);
+  if (!resolved && (actor.companyId || actor.brokerageId)) {
+    return { ok: false, statusCode: 403, error: 'Forbidden' };
+  }
+  return tenantCheck(resolved || record, actor);
+}
+
+function filterByTenant(rows = [], actor = {}) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => enforceTenantScope(row, actor).ok);
+}
+
+function withActorTenant(payload = {}, actor = {}) {
+  const base = payload && typeof payload === 'object' ? payload : {};
+  return {
+    ...base,
+    CompanyID: actor.companyId || null,
+    BrokerageID: actor.brokerageId || null
+  };
+}
+
+function enforceTenantReference(record, actor, res) {
+  if (!record) return true;
+  const scope = enforceTenantScope(record, actor);
+  if (!scope.ok) {
+    sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+    return false;
+  }
+  return true;
+}
+
 // ── readJson helper (may be called before V2 dispatch) ──────────────────────
 async function readJsonOnce(req) {
   if (req._parsedBody !== undefined) return req._parsedBody;
@@ -740,28 +822,38 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/site-visits' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.listSiteVisits();
+      if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/site-visits' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
-      const payload = await runtime.createSiteVisit(body);
+      if (!enforceTenantReference(runtime.repository.readLead(body.LeadID || body.leadId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.readRequirement(body.RequirementID || body.requirementId), actor, res)) return;
+      const payload = await runtime.createSiteVisit(withActorTenant(body, actor));
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname.startsWith('/api/site-visits/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const visitId = pathname.split('/').filter(Boolean)[2];
       if (!visitId) {
         sendJson(res, { ok: false, error: 'Bad site visits path' }, 400);
         return;
       }
+      const existingVisit = await runtime.getSiteVisit(visitId);
+      if (existingVisit?.ok && !enforceTenantReference(existingVisit.data, actor, res)) return;
 
       if (req.method === 'GET') {
-        const payload = await runtime.getSiteVisit(visitId);
-        sendJson(res, payload, payload.ok ? 200 : 404);
+        sendJson(res, existingVisit, existingVisit.ok ? 200 : 404);
         return;
       }
 
@@ -773,7 +865,7 @@ async function handleApi(req, res, url) {
 
       if (req.method === 'PATCH' && pathname.endsWith('/reschedule')) {
         const body = await readJson(req);
-        const payload = await runtime.rescheduleSiteVisit(visitId, body);
+        const payload = await runtime.rescheduleSiteVisit(visitId, withActorTenant(body, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
@@ -798,7 +890,7 @@ async function handleApi(req, res, url) {
 
       if (req.method === 'PATCH') {
         const body = await readJson(req);
-        const payload = await runtime.updateSiteVisit(visitId, body);
+        const payload = await runtime.updateSiteVisit(visitId, withActorTenant(body, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
@@ -808,40 +900,49 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/shortlist' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const requirementId = url.searchParams.get('requirementId') || undefined;
       const leadId = url.searchParams.get('leadId') || undefined;
       const status = url.searchParams.get('status') || undefined;
       const payload = await runtime.listShortlist({ requirementId, leadId, status });
+      if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/shortlist' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
-      const payload = await runtime.addToShortlist(body);
+      if (!enforceTenantReference(runtime.repository.readLead(body.LeadID || body.leadId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.readRequirement(body.RequirementID || body.requirementId), actor, res)) return;
+      const payload = await runtime.addToShortlist(withActorTenant({ ...body, createdBy: actor.userId }, actor));
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname.startsWith('/api/shortlist/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const shortlistId = pathname.split('/').filter(Boolean)[2];
+      const existingShortlist = await runtime.getShortlist(shortlistId);
+      if (existingShortlist?.ok && !enforceTenantReference(existingShortlist.data, actor, res)) return;
 
       if (req.method === 'GET') {
-        const payload = await runtime.getShortlist(shortlistId);
-        sendJson(res, payload, payload.ok ? 200 : 404);
+        sendJson(res, existingShortlist, existingShortlist.ok ? 200 : 404);
         return;
       }
 
       if (req.method === 'PATCH') {
         const body = await readJson(req);
-        const payload = await runtime.updateShortlist(shortlistId, body);
+        const payload = await runtime.updateShortlist(shortlistId, withActorTenant(body, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
 
       if (req.method === 'POST' && pathname.endsWith('/remove')) {
-        const body = await readJson(req);
-        const payload = await runtime.removeFromShortlist(shortlistId, body.removedBy || body.RemovedBy || 'system');
+        const payload = await runtime.removeFromShortlist(shortlistId, actor.userId || 'system');
         sendJson(res, payload, payload.ok ? 200 : 404);
         return;
       }
@@ -851,24 +952,35 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/negotiations' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.listNegotiations();
+      if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/negotiations' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
-      const payload = await runtime.createNegotiation(body);
+      if (!enforceTenantReference(runtime.repository.readLead(body.LeadID || body.leadId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.readRequirement(body.RequirementID || body.requirementId), actor, res)) return;
+      const payload = await runtime.createNegotiation(withActorTenant({ ...body, createdBy: actor.userId, updatedBy: actor.userId }, actor));
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname.startsWith('/api/negotiations/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const negotiationId = pathname.split('/').filter(Boolean)[2];
       if (!negotiationId) {
         sendJson(res, { ok: false, error: 'Bad negotiation path' }, 400);
         return;
       }
+      const existingNegotiation = await runtime.getNegotiation(negotiationId);
+      if (existingNegotiation?.ok && !enforceTenantReference(existingNegotiation.data, actor, res)) return;
       const action = pathname.split('/').filter(Boolean)[3] || null;
       if (req.method === 'GET') {
         if (action === 'history') {
@@ -877,13 +989,12 @@ async function handleApi(req, res, url) {
           return;
         }
 
-        const payload = await runtime.getNegotiation(negotiationId);
-        sendJson(res, payload, payload.ok ? 200 : 404);
+        sendJson(res, existingNegotiation, existingNegotiation.ok ? 200 : 404);
         return;
       }
       if (req.method === 'PATCH') {
         const body = await readJson(req);
-        const payload = await runtime.updateNegotiation(negotiationId, body);
+        const payload = await runtime.updateNegotiation(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
@@ -892,73 +1003,73 @@ async function handleApi(req, res, url) {
         const body = await readJson(req);
 
         if (action === 'offer') {
-          const payload = await runtime.makeNegotiationOffer(negotiationId, body);
+          const payload = await runtime.makeNegotiationOffer(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'counter') {
-          const payload = await runtime.makeNegotiationCounterOffer(negotiationId, body);
+          const payload = await runtime.makeNegotiationCounterOffer(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'accept') {
-          const payload = await runtime.acceptNegotiationOffer(negotiationId, body);
+          const payload = await runtime.acceptNegotiationOffer(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'reject') {
-          const payload = await runtime.rejectNegotiationOffer(negotiationId, body);
+          const payload = await runtime.rejectNegotiationOffer(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'hold') {
-          const payload = await runtime.holdNegotiation(negotiationId, body);
+          const payload = await runtime.holdNegotiation(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'resume') {
-          const payload = await runtime.resumeNegotiation(negotiationId, body);
+          const payload = await runtime.resumeNegotiation(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'agree') {
-          const payload = await runtime.markNegotiationAgreed(negotiationId, body);
+          const payload = await runtime.markNegotiationAgreed(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'token') {
-          const payload = await runtime.recordNegotiationToken(negotiationId, body);
+          const payload = await runtime.recordNegotiationToken(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'agreement') {
-          const payload = await runtime.markNegotiationAgreement(negotiationId, body);
+          const payload = await runtime.markNegotiationAgreement(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'registration') {
-          const payload = await runtime.markNegotiationRegistration(negotiationId, body);
+          const payload = await runtime.markNegotiationRegistration(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'complete') {
-          const payload = await runtime.completeNegotiation(negotiationId, body);
+          const payload = await runtime.completeNegotiation(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
 
         if (action === 'cancel') {
-          const payload = await runtime.cancelNegotiation(negotiationId, body);
+          const payload = await runtime.cancelNegotiation(negotiationId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
           sendJson(res, payload, payload.ok ? 200 : 400);
           return;
         }
@@ -969,58 +1080,104 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/tokens' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.listTokens();
+      if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/tokens' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
-      const payload = await runtime.createToken(body);
+      if (!enforceTenantReference(runtime.repository.readLead(body.LeadID || body.leadId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.readRequirement(body.RequirementID || body.requirementId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.getNegotiation(body.NegotiationID || body.negotiationId), actor, res)) return;
+      const payload = await runtime.createToken(withActorTenant(body, actor));
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/deals' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.listDeals();
+      if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/deals' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
-      const payload = await runtime.createDeal(body);
+      if (!enforceTenantReference(runtime.repository.readLead(body.LeadID || body.leadId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.readRequirement(body.RequirementID || body.requirementId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.getNegotiation(body.NegotiationID || body.negotiationId), actor, res)) return;
+      if (!enforceTenantReference(runtime.repository.getToken(body.TokenID || body.tokenId), actor, res)) return;
+      const payload = await runtime.createDeal(withActorTenant(body, actor));
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/commission' && req.method === 'GET') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const payload = await runtime.listCommissions();
+      if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
       sendJson(res, payload);
       return;
     }
 
     if (pathname === '/api/commission' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
-      const payload = await runtime.createCommission(body);
+      if (!enforceTenantReference(runtime.repository.getDeal(body.DealID || body.dealId), actor, res)) return;
+      const payload = await runtime.createCommission(withActorTenant(body, actor));
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/commission/calculate' && req.method === 'POST') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const body = await readJson(req);
-      const payload = await runtime.calculateCommission(body);
+      if (!enforceTenantReference(runtime.repository.getDeal(body.DealID || body.dealId), actor, res)) return;
+      const payload = await runtime.calculateCommission(withActorTenant(body, actor));
       sendJson(res, payload, payload.ok ? 200 : 400);
       return;
     }
 
     if (pathname === '/api/commission/summary' && req.method === 'GET') {
-      const payload = await runtime.getCommissionSummary();
-      sendJson(res, payload, payload.ok ? 200 : 400);
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
+      const listed = await runtime.listCommissions();
+      if (!listed?.ok) {
+        sendJson(res, listed, listed.statusCode || 400);
+        return;
+      }
+      const rows = filterByTenant(listed.data || [], actor);
+      const amount = (field) => rows.reduce((sum, row) => sum + Number(row[field] || 0), 0);
+      sendJson(res, {
+        ok: true,
+        data: {
+          totalCommission: amount('GrossCommission'),
+          received: amount('ReceivedAmount'),
+          pending: amount('PendingAmount'),
+          partial: rows.filter((row) => row.Status === 'PARTIAL').length,
+          overdue: rows.filter((row) => row.Status === 'OVERDUE').length,
+          cancelled: rows.filter((row) => row.Status === 'CANCELLED').length
+        }
+      });
       return;
     }
 
     if (pathname.startsWith('/api/commission/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const parts = pathname.split('/').filter(Boolean);
       const commissionId = parts[2];
       const action = parts[3] || null;
@@ -1028,6 +1185,8 @@ async function handleApi(req, res, url) {
         sendJson(res, { ok: false, error: 'Bad commission path' }, 400);
         return;
       }
+      const existingCommission = runtime.repository.getCommission(commissionId);
+      if (existingCommission && !enforceTenantReference(existingCommission, actor, res)) return;
 
       if (req.method === 'GET' && !action) {
         const payload = await runtime.getCommission(commissionId);
@@ -1049,14 +1208,14 @@ async function handleApi(req, res, url) {
 
       if (req.method === 'PATCH' && action === 'status') {
         const body = await readJson(req);
-        const payload = await runtime.updateCommissionStatus(commissionId, body);
+        const payload = await runtime.updateCommissionStatus(commissionId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
 
       if (req.method === 'POST' && action === 'payment') {
         const body = await readJson(req);
-        const payload = await runtime.recordCommissionPayment(commissionId, body);
+        const payload = await runtime.recordCommissionPayment(commissionId, withActorTenant({ ...body, receivedBy: actor.userId }, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
@@ -1066,6 +1225,8 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname.startsWith('/api/closing/')) {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       const parts = pathname.split('/').filter(Boolean);
       const dealId = parts[2];
       const action = parts[3] || null;
@@ -1073,6 +1234,8 @@ async function handleApi(req, res, url) {
         sendJson(res, { ok: false, error: 'Bad closing path' }, 400);
         return;
       }
+      const deal = runtime.repository.getDeal(dealId);
+      if (deal && !enforceTenantReference(deal, actor, res)) return;
 
       if (req.method === 'GET' && !action) {
         const payload = await runtime.getClosing(dealId);
@@ -1088,28 +1251,28 @@ async function handleApi(req, res, url) {
 
       if (req.method === 'POST' && action === 'start') {
         const body = await readJson(req);
-        const payload = await runtime.startClosing(dealId, body);
+        const payload = await runtime.startClosing(dealId, withActorTenant({ ...body, createdBy: actor.userId }, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
 
       if (req.method === 'PATCH' && action === 'checklist') {
         const body = await readJson(req);
-        const payload = await runtime.updateClosingChecklist(dealId, body);
+        const payload = await runtime.updateClosingChecklist(dealId, withActorTenant({ ...body, updatedBy: actor.userId, completedBy: actor.userId }, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
 
       if (req.method === 'POST' && action === 'complete') {
         const body = await readJson(req);
-        const payload = await runtime.completeClosing(dealId, body);
+        const payload = await runtime.completeClosing(dealId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
 
       if (req.method === 'POST' && action === 'close') {
         const body = await readJson(req);
-        const payload = await runtime.closeDeal(dealId, body);
+        const payload = await runtime.closeDeal(dealId, withActorTenant({ ...body, updatedBy: actor.userId }, actor));
         sendJson(res, payload, payload.ok ? 200 : 400);
         return;
       }
@@ -1164,45 +1327,54 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/owners') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       if (req.method === 'GET') {
         const payload = await runtime.listOwners();
+        if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
         sendJson(res, payload);
         return;
       }
 
       if (req.method === 'POST') {
         const body = await readJson(req);
-        const payload = await runtime.createOwner(body);
+        const payload = await runtime.createOwner(withActorTenant(body, actor));
         sendJson(res, payload, payload.ok ? 201 : 400);
         return;
       }
     }
 
     if (pathname === '/api/builders') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       if (req.method === 'GET') {
         const payload = await runtime.listBuilders();
+        if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
         sendJson(res, payload);
         return;
       }
 
       if (req.method === 'POST') {
         const body = await readJson(req);
-        const payload = await runtime.createBuilder(body);
+        const payload = await runtime.createBuilder(withActorTenant(body, actor));
         sendJson(res, payload, payload.ok ? 201 : 400);
         return;
       }
     }
 
     if (pathname === '/api/projects') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) { sendJson(res, { ok: false, error: 'Unauthorized' }, 401); return; }
       if (req.method === 'GET') {
         const payload = await runtime.listProjects();
+        if (payload?.ok && Array.isArray(payload.data)) payload.data = filterByTenant(payload.data, actor);
         sendJson(res, payload);
         return;
       }
 
       if (req.method === 'POST') {
         const body = await readJson(req);
-        const payload = await runtime.createProject(body);
+        const payload = await runtime.createProject(withActorTenant(body, actor));
         sendJson(res, payload, payload.ok ? 201 : 400);
         return;
       }
