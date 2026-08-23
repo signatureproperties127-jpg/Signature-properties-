@@ -3,10 +3,12 @@ const { test, expect } = require('@playwright/test');
 let sessionHeaders = {};
 
 test.beforeAll(async ({ request }) => {
+  const secret = process.env.SIG_REALTY_TEST_SESSION_TOKEN || 'pw-e2e-secret';
   const resp = await request.post('/api/auth/test-session', {
-    data: { secret: 'pw-e2e-secret', userId: 'USR-0001' }
+    data: { secret, userId: 'USR-0001' }
   });
   const body = await resp.json();
+  if (!resp.ok() || !body.data?.token) throw new Error(`test-session failed: ${JSON.stringify(body)}`);
   sessionHeaders = { 'x-session-token': body.data.token };
 });
 
