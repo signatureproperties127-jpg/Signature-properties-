@@ -4,6 +4,3 @@ package-lock.json
 # Production database lives outside the repo on the VM; never track live data.
 data/sig-realty-db.json
 
-# Auto-generated migration backups; never commit runtime artefacts.
-data/backups/
-data/migration-report.json
