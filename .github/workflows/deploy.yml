@@ -130,7 +130,8 @@ jobs:
           # Write GOOGLE_CLIENT_ID to protected EnvironmentFile when provided; otherwise keep existing value.
           sudo mkdir -p /etc/signature-realty
           if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then
-            ENV_TMP="$(umask 077 && mktemp)"
+            ENV_TMP="$(mktemp)"
+            chmod 600 "$ENV_TMP"
             printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID" > "$ENV_TMP"
             sudo install -o root -g root -m 600 "$ENV_TMP" /etc/signature-realty/signature-realty.env
             rm -f "$ENV_TMP"
