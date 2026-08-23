@@ -1,0 +1,12 @@
+{
+  "runId": "3amb-0-1787018745471",
+  "backupPath": "/home/runner/workspace/data/backups/sig-realty-db-backup-3AMB0-1787018745470.json",
+  "sourceDbPath": "/tmp/sig-rollback-NvMO1Q/sig-realty-db.json",
+  "dbSizeBytes": 118,
+  "checksum": "sha256:b6a271ea05e27f1a18fd9631174846cbcbb4cd29ed750442a21006a396e51dc2",
+  "timestamp": "2026-08-18T02:05:45.471Z",
+  "migrationVersion": "18.0",
+  "environment": "production",
+  "hostname": "repl",
+  "context": "production-apply"
+}

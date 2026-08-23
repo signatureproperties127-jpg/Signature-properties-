@@ -1,0 +1,30 @@
+{
+  "migrationVersion": "18.0",
+  "mode": "dry-run",
+  "timestamp": "2026-08-18T05:17:03.358Z",
+  "backupPath": null,
+  "scanned": {
+    "leads": 1,
+    "transactions": 0,
+    "requirements": 0
+  },
+  "eligible": {
+    "leads": 1,
+    "transactions": 0,
+    "requirements": 0
+  },
+  "migrated": {
+    "leads": 1,
+    "transactions": 0,
+    "requirements": 0
+  },
+  "skipped": {
+    "leads": 0,
+    "transactions": 0,
+    "requirements": 0
+  },
+  "duplicates": [],
+  "relationshipErrors": [],
+  "fieldWarnings": [],
+  "manualReview": []
+}

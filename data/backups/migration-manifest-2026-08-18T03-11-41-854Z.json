@@ -1,0 +1,12 @@
+{
+  "runId": "2026-08-18T03-11-41-854Z",
+  "backupPath": "/home/runner/workspace/data/backups/sig-realty-db-backup-2026-08-18T03-11-41-854Z.json",
+  "sourceDbPath": "/tmp/sig-p18-vFSOai/sig-realty-db.json",
+  "dbSizeBytes": 1475,
+  "checksum": "sha256:21e9df0ce3c35448fea04bfba61f2d8dca443ebad2d7e9ef522265f1faea1b0d",
+  "timestamp": "2026-08-18T03:11:41.855Z",
+  "migrationVersion": "18.0",
+  "environment": "production",
+  "hostname": "repl",
+  "context": "production-apply"
+}

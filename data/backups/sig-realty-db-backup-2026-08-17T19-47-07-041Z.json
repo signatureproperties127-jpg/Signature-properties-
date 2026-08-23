@@ -1,0 +1,174 @@
+{
+  "Leads": [
+    {
+      "LeadID": "LEAD-0001",
+      "ClientName": "Rahul Shah",
+      "Phone": "+91 98765 43210",
+      "Email": "rahul@test.com",
+      "LeadStatus": "Active",
+      "Lifecycle": "Client",
+      "CreatedAt": "2026-01-01T00:00:00.000Z",
+      "UpdatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "LeadID": "LEAD-0002",
+      "ClientName": "Priya Patel",
+      "Phone": "+91 98220 11888",
+      "Email": "priya@test.com",
+      "LeadStatus": "New",
+      "Lifecycle": "Prospect",
+      "CreatedAt": "2026-01-02T00:00:00.000Z",
+      "UpdatedAt": "2026-01-02T00:00:00.000Z"
+    },
+    {
+      "LeadID": "L000001",
+      "ClientName": "Rahul Shah",
+      "Phone": "+91 98765 43210",
+      "Email": "rahul@test.com",
+      "LeadStatus": "Active",
+      "Lifecycle": "Client",
+      "CreatedAt": "2026-01-01T00:00:00.000Z",
+      "UpdatedAt": "2026-01-01T00:00:00.000Z",
+      "LegacyID": "LEAD-0001",
+      "PrimaryMobile": "+91 98765 43210",
+      "ClientStatus": "Active",
+      "ClientLifecycle": "Client",
+      "Source": null,
+      "_v2": true,
+      "MigratedAt": "2026-08-17T19:47:06.987Z",
+      "MigrationVersion": "18.0"
+    },
+    {
+      "LeadID": "L000002",
+      "ClientName": "Priya Patel",
+      "Phone": "+91 98220 11888",
+      "Email": "priya@test.com",
+      "LeadStatus": "New",
+      "Lifecycle": "Prospect",
+      "CreatedAt": "2026-01-02T00:00:00.000Z",
+      "UpdatedAt": "2026-01-02T00:00:00.000Z",
+      "LegacyID": "LEAD-0002",
+      "PrimaryMobile": "+91 98220 11888",
+      "ClientStatus": "New",
+      "ClientLifecycle": "Prospect",
+      "Source": null,
+      "_v2": true,
+      "MigratedAt": "2026-08-17T19:47:06.989Z",
+      "MigrationVersion": "18.0"
+    }
+  ],
+  "Transactions": [
+    {
+      "TransactionID": "TXN-0001",
+      "LeadID": "LEAD-0001",
+      "TransactionType": "Purchase",
+      "Status": "Open",
+      "CreatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "TransactionID": "T000001",
+      "LeadID": "L000001",
+      "TransactionType": "Purchase",
+      "Status": "Open",
+      "CreatedAt": "2026-01-01T00:00:00.000Z",
+      "LegacyID": "TXN-0001",
+      "_v2": true,
+      "MigratedAt": "2026-08-17T19:47:06.990Z",
+      "MigrationVersion": "18.0"
+    }
+  ],
+  "Requirements": [
+    {
+      "RequirementID": "REQ-0001",
+      "LeadID": "LEAD-0001",
+      "TransactionID": "TXN-0001",
+      "Category": "Residential",
+      "SubCategory": "Flat",
+      "BudgetMax": 10000000,
+      "Location1": "Vesu",
+      "Fields": {
+        "BudgetMax": {
+          "state": "KNOWN",
+          "value": 10000000
+        }
+      },
+      "CreatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "RequirementID": "R000001",
+      "LeadID": "L000001",
+      "TransactionID": "T000001",
+      "Category": "Residential",
+      "SubCategory": "Flat",
+      "BudgetMax": 10000000,
+      "Location1": "Vesu",
+      "Fields": {
+        "BudgetMax": {
+          "state": "KNOWN",
+          "value": 10000000
+        }
+      },
+      "CreatedAt": "2026-01-01T00:00:00.000Z",
+      "LegacyID": "REQ-0001",
+      "FormVersion": null,
+      "_v2": true,
+      "MigratedAt": "2026-08-17T19:47:06.992Z",
+      "MigrationVersion": "18.0"
+    }
+  ],
+  "Activities": [],
+  "FollowUps": [],
+  "Timeline": [],
+  "Inventory": [],
+  "Matches": [],
+  "Deals": [],
+  "Users": [],
+  "Roles": [],
+  "MigrationMap": [
+    {
+      "MigrationID": "fb2f6459-4c1f-4229-8a08-27df742c0943",
+      "EntityType": "Lead",
+      "LegacyID": "LEAD-0001",
+      "V2ID": "L000001",
+      "Status": "MIGRATED",
+      "Reason": "Automatic migration",
+      "CreatedAt": "2026-08-17T19:47:06.989Z",
+      "MigrationVersion": "18.0"
+    },
+    {
+      "MigrationID": "a8e98c89-d134-4245-ba45-e6a859912c05",
+      "EntityType": "Lead",
+      "LegacyID": "LEAD-0002",
+      "V2ID": "L000002",
+      "Status": "MIGRATED",
+      "Reason": "Automatic migration",
+      "CreatedAt": "2026-08-17T19:47:06.989Z",
+      "MigrationVersion": "18.0"
+    },
+    {
+      "MigrationID": "1de32acc-f407-4382-ad67-4b1693b286a6",
+      "EntityType": "Transaction",
+      "LegacyID": "TXN-0001",
+      "V2ID": "T000001",
+      "Status": "MIGRATED",
+      "Reason": "Automatic migration",
+      "CreatedAt": "2026-08-17T19:47:06.990Z",
+      "MigrationVersion": "18.0"
+    },
+    {
+      "MigrationID": "d8c50e33-fcf7-4946-8ebc-2d5a9c006eab",
+      "EntityType": "Requirement",
+      "LegacyID": "REQ-0001",
+      "V2ID": "R000001",
+      "Status": "MIGRATED",
+      "Reason": "Automatic migration",
+      "CreatedAt": "2026-08-17T19:47:06.993Z",
+      "MigrationVersion": "18.0"
+    }
+  ],
+  "_V2Counters": {
+    "Lead": 0,
+    "Transaction": 0,
+    "Requirement": 0
+  }
+}
