@@ -256,6 +256,26 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    if (pathname === '/api/auth/test-session' && req.method === 'POST') {
+      const testSecret = String(process.env.SIG_REALTY_TEST_SESSION_TOKEN || '').trim();
+      if (!testSecret) { sendJson(res, { ok: false, error: 'Not found' }, 404); return; }
+      const body = await readJson(req);
+      if (!body || String(body.secret || '').trim() !== testSecret) {
+        sendJson(res, { ok: false, error: 'Forbidden' }, 403);
+        return;
+      }
+      const userId = String(body.userId || 'USR-0001').trim();
+      const sessionId = runtime.auth.issueSession({
+        userId,
+        role: 'ADMIN',
+        companyId: 'COMP-0001',
+        brokerageId: 'BRO-0001',
+        permissions: ['*']
+      });
+      sendJson(res, { ok: true, data: { token: sessionId } });
+      return;
+    }
+
       if (pathname === '/api/public/properties' && req.method === 'GET') {
       const payload = await runtime.listPublicProperties();
       sendJson(res, payload);
