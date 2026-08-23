@@ -14,7 +14,7 @@ function configureFixtureUser(dbFile, options = {}) {
   const repository = new JsonRepository(dbFile);
   const existing = repository.getUser('USR-0001');
   const role = String(options.role || existing?.Role || 'ADMIN').trim().toUpperCase();
-  const companyId = String(options.companyId || existing?.CompanyID || 'COMP-001').trim();
+  const companyId = String(options.companyId || existing?.CompanyID || 'COMP-0001').trim();
   const brokerageId = String(options.brokerageId || existing?.BrokerageID || 'BRO-0001').trim();
   const permissions = normalizePermissions(options.permissions, existing?.Permissions || []);
   repository.updateUser('USR-0001', {

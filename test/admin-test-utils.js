@@ -41,9 +41,9 @@ function makeDbFile(prefix = 'sig-admin-test-') {
 function ensureTenantScopedDefaultUsers(dbFile) {
   const repository = new JsonRepository(dbFile);
   const tenantUsers = [
-    { UserID: 'USR-0001', CompanyID: 'COMP-001', BrokerageID: 'BRO-0001' },
-    { UserID: 'USR-0002', CompanyID: 'COMP-001', BrokerageID: 'BRO-0001' },
-    { UserID: 'USR-0003', CompanyID: 'COMP-001', BrokerageID: 'BRO-0001' }
+    { UserID: 'USR-0001', CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' },
+    { UserID: 'USR-0002', CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' },
+    { UserID: 'USR-0003', CompanyID: 'COMP-0001', BrokerageID: 'BRO-0001' }
   ];
   for (const entry of tenantUsers) {
     const user = repository.getUser(entry.UserID);
@@ -167,10 +167,15 @@ async function issueSessionToken(baseUrl, user = {}, headers = {}) {
     rawUser = null;
   }
 
-  const companyId = String(headers['x-company-id'] || headers['x-companyid'] || rawUser?.CompanyID || user.CompanyID || 'COMP-001').trim();
+  const companyId = String(headers['x-company-id'] || headers['x-companyid'] || rawUser?.CompanyID || user.CompanyID || 'COMP-0001').trim();
   const brokerageId = String(headers['x-brokerage-id'] || headers['x-brokerageid'] || rawUser?.BrokerageID || user.BrokerageID || 'BRO-0001').trim();
   const role = String(headers['x-user-role'] || rawUser?.Role || user.Role || 'AGENT').trim().toUpperCase();
   const permissions = normalizePermissions(headers['x-user-permissions'] || rawUser?.Permissions || user.Permissions, rawUser?.Permissions || user.Permissions || []);
+  const cacheKey = JSON.stringify({ role, companyId, brokerageId, permissions });
+  if (context.tokens.has(cacheKey)) {
+    return context.tokens.get(cacheKey);
+  }
+
   try {
     const rawDb = JSON.parse(fs.readFileSync(context.dbFile, 'utf8'));
     const users = Array.isArray(rawDb?.Users) ? rawDb.Users : [];
@@ -188,10 +193,6 @@ async function issueSessionToken(baseUrl, user = {}, headers = {}) {
     }
   } catch (_) {
     // best-effort patch for test fixtures
-  }
-  const cacheKey = JSON.stringify({ role, companyId, brokerageId, permissions });
-  if (context.tokens.has(cacheKey)) {
-    return context.tokens.get(cacheKey);
   }
 
   const response = await fetch(`${baseUrl}/api/auth/test-session`, {
