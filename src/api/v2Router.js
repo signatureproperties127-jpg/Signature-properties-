@@ -103,8 +103,11 @@ class V2Router {
         if (method === 'GET') {
           const auth = this._requireActor(req, url);
           if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-          const tenantScope = this._enforceTenantScope(this.repo.readLead(leadId), auth.actor);
-          if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
+          const lead = this.repo.readLead(leadId);
+          if (lead) {
+            const tenantScope = this._enforceTenantScope(lead, auth.actor);
+            if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
+          }
           const rows = this.txnSvc.listTransactionsByLead(leadId);
           return this._ok({ ok: true, data: rows });
         }
@@ -163,8 +166,11 @@ class V2Router {
       const leadId = wsMatch[1];
       const auth = this._requireActor(req, url);
       if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-      const tenantScope = this._enforceTenantScope(this.repo.readLead(leadId), auth.actor);
-      if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
+      const lead = this.repo.readLead(leadId);
+      if (lead) {
+        const tenantScope = this._enforceTenantScope(lead, auth.actor);
+        if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
+      }
       const result = await this._buildClientWorkspace(leadId);
       return this._json(result.ok ? 200 : 404, result);
     }
@@ -176,8 +182,11 @@ class V2Router {
       if (method === 'GET') {
         const auth = this._requireActor(req, url);
         if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
-        const transactionScope = this._enforceTenantScope(this.txnSvc.getTransaction(transactionId)?.data || null, auth.actor);
-        if (!transactionScope.ok) return this._json(transactionScope.statusCode, { ok: false, error: transactionScope.error });
+        const transaction = this.txnSvc.getTransaction(transactionId);
+        if (transaction.ok) {
+          const transactionScope = this._enforceTenantScope(transaction.data, auth.actor);
+          if (!transactionScope.ok) return this._json(transactionScope.statusCode, { ok: false, error: transactionScope.error });
+        }
         const rows = this.reqSvc.listRequirementsByTransaction(transactionId);
         return this._ok({ ok: true, data: rows });
       }
