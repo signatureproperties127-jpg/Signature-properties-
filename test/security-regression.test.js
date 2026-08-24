@@ -313,6 +313,92 @@ function seedP0OperationalGraph(dbFile, { companyId, brokerageId, tag }) {
   return { leadId, requirementId, propertyId, matchId, shortlistId, visitId, negotiationId, tokenId, dealId, commissionId, closingId, ownerId, builderId, projectId };
 }
 
+function seedV2TenantGraph(dbFile, { companyId, brokerageId, tag }) {
+  const now = new Date().toISOString();
+  const raw = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+  const leadId = `LEAD-V2-${tag}`;
+  const transactionId = `TXN-V2-${tag}`;
+  const requirementId = `REQ-V2-${tag}`;
+
+  raw.Leads.push({
+    LeadID: leadId,
+    ClientName: `V2 Client ${tag}`,
+    Phone: `90000000${tag === 'A' ? '21' : '31'}`,
+    LeadStatus: 'Active',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Transactions.push({
+    TransactionID: transactionId,
+    LeadID: leadId,
+    TransactionType: 'Purchase',
+    Status: 'Active',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+  raw.Requirements.push({
+    RequirementID: requirementId,
+    LeadID: leadId,
+    TransactionID: transactionId,
+    TransactionType: 'Purchase',
+    Category: 'Residential',
+    CompanyID: companyId,
+    BrokerageID: brokerageId,
+    CreatedAt: now,
+    UpdatedAt: now
+  });
+
+  fs.writeFileSync(dbFile, JSON.stringify(raw, null, 2));
+  return { leadId, transactionId, requirementId };
+}
+
+function ensureBrokerShareRequirementTenant(dbFile, companyId, brokerageId) {
+  const now = new Date().toISOString();
+  const raw = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+  const leadId = 'LEAD-0001';
+  const requirementId = 'REQ-0001';
+
+  const leadIndex = raw.Leads.findIndex((lead) => lead.LeadID === leadId);
+  if (leadIndex === -1) {
+    raw.Leads.push({
+      LeadID: leadId,
+      ClientName: 'Broker Share Lead',
+      CompanyID: companyId,
+      BrokerageID: brokerageId,
+      CreatedAt: now,
+      UpdatedAt: now
+    });
+  } else {
+    raw.Leads[leadIndex].CompanyID = companyId;
+    raw.Leads[leadIndex].BrokerageID = brokerageId;
+  }
+
+  const requirementIndex = raw.Requirements.findIndex((requirement) => requirement.RequirementID === requirementId);
+  if (requirementIndex === -1) {
+    raw.Requirements.push({
+      RequirementID: requirementId,
+      LeadID: leadId,
+      TransactionID: 'TXN-0001',
+      TransactionType: 'Purchase',
+      Category: 'Residential',
+      CompanyID: companyId,
+      BrokerageID: brokerageId,
+      CreatedAt: now,
+      UpdatedAt: now
+    });
+  } else {
+    raw.Requirements[requirementIndex].LeadID = leadId;
+    raw.Requirements[requirementIndex].CompanyID = companyId;
+    raw.Requirements[requirementIndex].BrokerageID = brokerageId;
+  }
+
+  fs.writeFileSync(dbFile, JSON.stringify(raw, null, 2));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // P0/P1 — Unauthenticated 401 gate tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -828,6 +914,99 @@ test('P0: cross-tenant access is rejected with 403 for tenant-sensitive operatio
     const projects = await requestJson(server.baseUrl, '/api/projects', { headers: tenantBHeaders });
     assert.equal(projects.response.status, 200);
     assert.equal((projects.payload.data || []).some((row) => row.ProjectID === ids.projectId), false);
+  } finally {
+    await stopServer(server.child);
+  }
+});
+
+test('P1 remediation: unauthenticated requests to remediated routes return 401', async () => {
+  const dbFile = makeTenantDb();
+  const ids = seedV2TenantGraph(dbFile, { companyId: 'COMP-AAA', brokerageId: 'BRK-AAA', tag: 'A' });
+  const server = await startServer(dbFile);
+  try {
+    const checks = [
+      ['GET', '/api/users'],
+      ['POST', '/api/broker/share', { requirementId: ids.requirementId, brokerId: 'BRO-001' }],
+      ['GET', '/api/v2/clients'],
+      ['GET', `/api/v2/clients/${ids.leadId}`],
+      ['GET', `/api/clients/${ids.leadId}/workspace`],
+      ['GET', `/api/leads/${ids.leadId}/transactions`],
+      ['GET', `/api/transactions/${ids.transactionId}`],
+      ['GET', `/api/transactions/${ids.transactionId}/requirements`]
+    ];
+
+    for (const [method, route, body] of checks) {
+      const res = await requestJson(server.baseUrl, route, { method, body });
+      assert.equal(res.response.status, 401, `${method} ${route} must return 401`);
+      assert.equal(res.payload.ok, false);
+    }
+  } finally {
+    await stopServer(server.child);
+  }
+});
+
+test('P1 remediation: same-tenant authenticated requests succeed with 200', async () => {
+  const dbFile = makeTenantDb();
+  const ids = seedV2TenantGraph(dbFile, { companyId: 'COMP-AAA', brokerageId: 'BRK-AAA', tag: 'A' });
+  ensureBrokerShareRequirementTenant(dbFile, 'COMP-AAA', 'BRK-AAA');
+  const server = await startServer(dbFile);
+  try {
+    const users = await requestJson(server.baseUrl, '/api/users', { headers: tenantAHeaders });
+    assert.equal(users.response.status, 200);
+    assert.equal(users.payload.ok, true);
+
+    const brokerShare = await requestJson(server.baseUrl, '/api/broker/share', {
+      method: 'POST',
+      headers: tenantAHeaders,
+      body: { requirementId: 'REQ-0001', brokerId: 'BRO-001' }
+    });
+    assert.equal(brokerShare.response.status, 200);
+    assert.equal(brokerShare.payload.ok, true);
+
+    const routes = [
+      '/api/v2/clients',
+      `/api/v2/clients/${ids.leadId}`,
+      `/api/clients/${ids.leadId}/workspace`,
+      `/api/leads/${ids.leadId}/transactions`,
+      `/api/transactions/${ids.transactionId}`,
+      `/api/transactions/${ids.transactionId}/requirements`
+    ];
+    for (const route of routes) {
+      const res = await requestJson(server.baseUrl, route, { headers: tenantAHeaders });
+      assert.equal(res.response.status, 200, `GET ${route} must return 200 for same tenant`);
+      assert.equal(res.payload.ok, true);
+    }
+  } finally {
+    await stopServer(server.child);
+  }
+});
+
+test('P1 remediation: cross-tenant access to remediated tenant routes returns 403', async () => {
+  const dbFile = makeTenantDb();
+  const ids = seedV2TenantGraph(dbFile, { companyId: 'COMP-AAA', brokerageId: 'BRK-AAA', tag: 'A' });
+  ensureBrokerShareRequirementTenant(dbFile, 'COMP-AAA', 'BRK-AAA');
+  const server = await startServer(dbFile);
+  try {
+    const brokerShare = await requestJson(server.baseUrl, '/api/broker/share', {
+      method: 'POST',
+      headers: tenantBHeaders,
+      body: { requirementId: 'REQ-0001', brokerId: 'BRO-001' }
+    });
+    assert.equal(brokerShare.response.status, 403);
+    assert.equal(brokerShare.payload.ok, false);
+
+    const routes = [
+      `/api/v2/clients/${ids.leadId}`,
+      `/api/clients/${ids.leadId}/workspace`,
+      `/api/leads/${ids.leadId}/transactions`,
+      `/api/transactions/${ids.transactionId}`,
+      `/api/transactions/${ids.transactionId}/requirements`
+    ];
+    for (const route of routes) {
+      const res = await requestJson(server.baseUrl, route, { headers: tenantBHeaders });
+      assert.equal(res.response.status, 403, `GET ${route} must return 403 for cross tenant`);
+      assert.equal(res.payload.ok, false);
+    }
   } finally {
     await stopServer(server.child);
   }

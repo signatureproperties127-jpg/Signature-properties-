@@ -824,7 +824,13 @@ async function handleApi(req, res, url) {
 
     if (pathname === '/api/broker/share') {
       if (req.method === 'POST') {
+        const actor = getAuthenticatedActor(req, url);
+        if (!actor?.userId) {
+          sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+          return;
+        }
         const body = await readJson(req);
+        if (!enforceTenantReference(runtime.repository.readRequirement(body.requirementId || body.RequirementID), actor, res)) return;
         const payload = await runtime.brokerShare(body.requirementId, body.brokerId);
         sendJson(res, { ok: true, data: payload });
       } else {
@@ -1983,6 +1989,11 @@ async function handleApi(req, res, url) {
     }
 
     if (pathname === '/api/users') {
+      const actor = getAuthenticatedActor(req, url);
+      if (!actor?.userId) {
+        sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+        return;
+      }
       sendJson(res, { ok: true, data: [] });
       return;
     }

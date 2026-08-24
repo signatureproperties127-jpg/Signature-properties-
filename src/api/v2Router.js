@@ -101,6 +101,10 @@ class V2Router {
 
       if (sub === 'transactions') {
         if (method === 'GET') {
+          const auth = this._requireActor(req, url);
+          if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+          const tenantScope = this._enforceTenantScope(this.repo.readLead(leadId), auth.actor);
+          if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
           const rows = this.txnSvc.listTransactionsByLead(leadId);
           return this._ok({ ok: true, data: rows });
         }
@@ -157,6 +161,10 @@ class V2Router {
     const wsMatch = pathname.match(/^\/api\/clients\/([^/]+)\/workspace$/);
     if (wsMatch && method === 'GET') {
       const leadId = wsMatch[1];
+      const auth = this._requireActor(req, url);
+      if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+      const tenantScope = this._enforceTenantScope(this.repo.readLead(leadId), auth.actor);
+      if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
       const result = await this._buildClientWorkspace(leadId);
       return this._json(result.ok ? 200 : 404, result);
     }
@@ -166,6 +174,10 @@ class V2Router {
     if (txnReqMatch) {
       const transactionId = txnReqMatch[1];
       if (method === 'GET') {
+        const auth = this._requireActor(req, url);
+        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
+        const transactionScope = this._enforceTenantScope(this.txnSvc.getTransaction(transactionId)?.data || null, auth.actor);
+        if (!transactionScope.ok) return this._json(transactionScope.statusCode, { ok: false, error: transactionScope.error });
         const rows = this.reqSvc.listRequirementsByTransaction(transactionId);
         return this._ok({ ok: true, data: rows });
       }
@@ -186,7 +198,13 @@ class V2Router {
     if (txnMatch) {
       const txnId = txnMatch[1];
       if (method === 'GET') {
+        const auth = this._requireActor(req, url);
+        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
         const result = this.txnSvc.getTransaction(txnId);
+        if (result.ok) {
+          const tenantScope = this._enforceTenantScope(result.data, auth.actor);
+          if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
+        }
         return this._json(result.ok ? 200 : 404, result);
       }
       if (method === 'PATCH') {
@@ -527,6 +545,8 @@ class V2Router {
 
     // ── /api/v2/clients  (list + create) ─────────────────────────────────────
     if (pathname === '/api/v2/clients' && method === 'GET') {
+      const auth = this._requireActor(req, url);
+      if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
       const filters = {
         ClientStatus:    url.searchParams.get('status')     || undefined,
         ClientLifecycle: url.searchParams.get('lifecycle')  || undefined,
@@ -535,7 +555,7 @@ class V2Router {
         source:          url.searchParams.get('source')     || undefined,
         search:          url.searchParams.get('q')          || url.searchParams.get('search') || undefined
       };
-      const raw    = this.leadSvc.listLeads(filters);
+      const raw    = this._filterByTenant(this.leadSvc.listLeads(filters), auth.actor);
       const data   = this._enrichClientsForList(raw);
       return this._ok({ ok: true, data, count: data.length });
     }
@@ -610,8 +630,12 @@ class V2Router {
     if (v2ClientMatch) {
       const leadId = v2ClientMatch[1];
       if (method === 'GET') {
+        const auth = this._requireActor(req, url);
+        if (!auth.ok) return this._json(auth.statusCode, { ok: false, error: auth.error });
         const lead = this.repo.readLead(leadId);
         if (!lead) return this._json(404, { ok: false, error: { code: 'NOT_FOUND', message: 'Client not found' } });
+        const tenantScope = this._enforceTenantScope(lead, auth.actor);
+        if (!tenantScope.ok) return this._json(tenantScope.statusCode, { ok: false, error: tenantScope.error });
         return this._ok({ ok: true, data: lead });
       }
       if (method === 'PATCH') {
@@ -972,6 +996,65 @@ class V2Router {
       return { ok: false, statusCode: 401, error: 'Unauthorized' };
     }
     return { ok: true, actor };
+  }
+
+  _tenantCheck(record = {}, actor = {}) {
+    if (!record || typeof record !== 'object') return { ok: true };
+    if (actor.companyId && record.CompanyID && String(record.CompanyID) !== String(actor.companyId)) {
+      return { ok: false, statusCode: 403, error: 'Forbidden' };
+    }
+    if (actor.brokerageId && record.BrokerageID && String(record.BrokerageID) !== String(actor.brokerageId)) {
+      return { ok: false, statusCode: 403, error: 'Forbidden' };
+    }
+    return { ok: true };
+  }
+
+  _resolveTenantScopedRecord(record = {}, seen = new Set()) {
+    if (!record || typeof record !== 'object') return null;
+    if (record.CompanyID || record.BrokerageID) {
+      return { CompanyID: record.CompanyID || null, BrokerageID: record.BrokerageID || null };
+    }
+
+    const recordKey = [
+      record.LeadID || record.leadId || '',
+      record.RequirementID || record.requirementId || '',
+      record.TransactionID || record.transactionId || ''
+    ].join('|');
+    if (recordKey && seen.has(recordKey)) return null;
+    if (recordKey) seen.add(recordKey);
+
+    const leadId = record.LeadID || record.leadId;
+    if (leadId) {
+      const lead = this.repo.readLead(leadId);
+      if (lead) return this._resolveTenantScopedRecord(lead, seen);
+    }
+
+    const requirementId = record.RequirementID || record.requirementId;
+    if (requirementId) {
+      const requirement = this.repo.readRequirement(requirementId);
+      if (requirement) return this._resolveTenantScopedRecord(requirement, seen);
+    }
+
+    const transactionId = record.TransactionID || record.transactionId;
+    if (transactionId) {
+      const db = this.repo.read();
+      const transaction = (db.Transactions || []).find((entry) => entry.TransactionID === transactionId);
+      if (transaction) return this._resolveTenantScopedRecord(transaction, seen);
+    }
+
+    return null;
+  }
+
+  _enforceTenantScope(record = {}, actor = {}) {
+    const resolved = this._resolveTenantScopedRecord(record);
+    if (!resolved && (actor.companyId || actor.brokerageId)) {
+      return { ok: false, statusCode: 403, error: 'Forbidden' };
+    }
+    return this._tenantCheck(resolved || record, actor);
+  }
+
+  _filterByTenant(rows = [], actor = {}) {
+    return (Array.isArray(rows) ? rows : []).filter((row) => this._enforceTenantScope(row, actor).ok);
   }
 
   _ok(body) {
