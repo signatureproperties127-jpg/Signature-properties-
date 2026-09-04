@@ -953,11 +953,21 @@
           <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--clr-brown);margin-bottom:8px" id="mm-title-${esc(reqId)}">🎯 Smart Matches</div>
           <div id="mm-content-${esc(reqId)}" style="font-size:12.5px;color:#6b7280">Loading…</div>
         </div>
+
+        <!-- Shortlist — inline compare view for this requirement -->
+        <div id="sl-${esc(reqId)}" class="shortlist-panel" data-testid="shortlist-panel-${esc(reqId)}" style="display:none;margin-top:12px;padding:12px;background:#fffbeb;border-radius:8px;border:1px solid #fde68a">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#92400e" id="sl-title-${esc(reqId)}">⭐ Shortlist</div>
+            <button class="need-action-btn ghost" style="padding:4px 10px;font-size:11px" onclick="toggleShortlist('${esc(reqId)}')" data-testid="sl-close-${esc(reqId)}">Hide</button>
+          </div>
+          <div id="sl-content-${esc(reqId)}" style="font-size:12.5px;color:#6b7280">Loading…</div>
+        </div>
       </div>
 
       <div class="need-card-footer">
         <button class="need-action-btn primary" data-testid="req-update-${esc(reqId)}" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update</button>
         <button class="need-action-btn ghost"   data-testid="req-matches-${esc(reqId)}" onclick="toggleSmartMatches('${esc(reqId)}')">🎯 Smart Match</button>
+        <button class="need-action-btn ghost"   data-testid="req-shortlist-${esc(reqId)}" onclick="toggleShortlist('${esc(reqId)}')">⭐ Shortlist</button>
         <button class="need-action-btn ghost"   onclick="openSiteVisitsContext('${esc(reqId)}')">🏠 Site Visits</button>
         <button class="need-action-btn ghost"   onclick="showNextQuestionsSection('${esc(reqId)}')">💬 Ask</button>
         <button class="need-action-btn danger"  onclick="markLostReq('${esc(reqId)}')">✗ Lost</button>
@@ -2025,6 +2035,8 @@
     wrap.style.display = 'block';
     content.innerHTML = '<span style="color:#6b7280">Scanning inventory…</span>';
     try {
+      // Prime shortlist cache so cards render correct state on first paint
+      await loadShortlistForReq(reqId, /*silent*/ true);
       const res = await fetch(`/api/v2/requirements/${encodeURIComponent(reqId)}/matches?limit=10&minScore=40`).then(r => r.json());
       if (!res.ok) throw new Error(res.error || 'Failed');
       const { total, scanned, matches } = res.data;
@@ -2035,8 +2047,173 @@
         content.innerHTML = matches.map(mm => smartMatchCard(mm, reqId)).join('');
       }
       wrap.dataset.loaded = '1';
+      // Remember last matches so we can re-render after shortlist toggles
+      workspace._lastMatches = workspace._lastMatches || {};
+      workspace._lastMatches[reqId] = matches || [];
     } catch(e) {
       content.innerHTML = `<div style="color:var(--clr-danger)">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  // ── Shortlist ────────────────────────────────────────────────────────────
+  async function loadShortlistForReq(reqId, silent = false) {
+    workspace._shortlist = workspace._shortlist || {};
+    workspace._shortlistedIds = workspace._shortlistedIds || {};
+    try {
+      const res = await fetch(`/api/v2/shortlist/${encodeURIComponent(reqId)}?status=Active`).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      workspace._shortlist[reqId] = res.data || [];
+      workspace._shortlistedIds[reqId] = new Set((res.data || []).map(r => r.PropertyID));
+      return workspace._shortlist[reqId];
+    } catch (e) {
+      if (!silent) console.warn('Shortlist load failed', e);
+      workspace._shortlist[reqId] = workspace._shortlist[reqId] || [];
+      workspace._shortlistedIds[reqId] = workspace._shortlistedIds[reqId] || new Set();
+      return workspace._shortlist[reqId];
+    }
+  }
+
+  async function toggleShortlist(reqId) {
+    const wrap    = document.getElementById(`sl-${reqId}`);
+    const content = document.getElementById(`sl-content-${reqId}`);
+    if (!wrap) return;
+    if (wrap.style.display !== 'none') { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    content.innerHTML = '<span style="color:#6b7280">Loading shortlist…</span>';
+    await loadShortlistForReq(reqId);
+    renderShortlist(reqId);
+  }
+
+  function renderShortlist(reqId) {
+    const wrap = document.getElementById(`sl-${reqId}`);
+    const content = document.getElementById(`sl-content-${reqId}`);
+    const title = document.getElementById(`sl-title-${reqId}`);
+    if (!wrap || !content) return;
+    const rows = (workspace._shortlist || {})[reqId] || [];
+    if (title) title.innerHTML = `⭐ Shortlist <span style="color:#92400e;font-weight:500;text-transform:none;letter-spacing:0">— ${rows.length} propert${rows.length === 1 ? 'y' : 'ies'}</span>`;
+    if (!rows.length) {
+      content.innerHTML = `<div style="padding:16px;text-align:center;color:#92400e;font-size:12.5px">No properties shortlisted yet. Open <b>🎯 Smart Match</b> and tap <b>☆ Shortlist</b> on any card.</div>`;
+      return;
+    }
+    // Side-by-side compare table (horizontal scroll on small screens)
+    const attrs = [
+      { label: 'Price',        val: (p) => fmtInrShort(p.AskingPrice, p.ListingFor) },
+      { label: 'Rate / sqft',  val: (p) => p.AskingRatePerSqFt ? `₹${Number(p.AskingRatePerSqFt).toLocaleString('en-IN')}` : '—' },
+      { label: 'Carpet Area',  val: (p) => p.CarpetArea ? `${p.CarpetArea} sqft` : '—' },
+      { label: 'BHK',          val: (p) => p.BHK || '—' },
+      { label: 'Furnishing',   val: (p) => p.FurnishingType || '—' },
+      { label: 'Location',     val: (p) => [p.Location1, p.SocietyName].filter(Boolean).join(' • ') || '—' },
+      { label: 'Sub-category', val: (p) => p.SubCategory || '—' },
+      { label: 'Source',       val: (p) => p.InventorySource || '—' },
+      { label: 'Status',       val: (p) => p.Status || '—' }
+    ];
+    const colWidth = 220;
+    const cardsHead = rows.map(r => shortlistHead(reqId, r)).join('');
+    const attrRows = attrs.map(a => `
+      <tr>
+        <td style="padding:6px 10px;background:#fef3c7;font-weight:700;color:#92400e;font-size:11px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;position:sticky;left:0">${esc(a.label)}</td>
+        ${rows.map(r => `<td style="padding:6px 10px;font-size:12.5px;color:#1f2937;min-width:${colWidth}px">${esc(a.val(r.Property || {}))}</td>`).join('')}
+      </tr>`).join('');
+    const notesRow = `
+      <tr>
+        <td style="padding:6px 10px;background:#fef3c7;font-weight:700;color:#92400e;font-size:11px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;position:sticky;left:0">Notes</td>
+        ${rows.map(r => `<td style="padding:6px 10px;min-width:${colWidth}px">
+          <textarea data-testid="sl-notes-${esc(r.PropertyID)}" rows="2" onchange="saveShortlistNote('${esc(reqId)}','${esc(r.PropertyID)}', this.value)" placeholder="Add note..." style="width:100%;font-size:12px;padding:4px 6px;border:1px solid #fde68a;border-radius:6px;background:#fff;resize:vertical;font-family:inherit">${esc(r.Notes || '')}</textarea>
+        </td>`).join('')}
+      </tr>`;
+    content.innerHTML = `
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table style="border-collapse:separate;border-spacing:0;background:#fff;border-radius:8px;border:1px solid #fde68a;width:100%;min-width:${Math.max(600, 160 + colWidth * rows.length)}px">
+          <thead>
+            <tr>
+              <th style="padding:8px 10px;background:#fef3c7;color:#92400e;font-size:11px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;position:sticky;left:0;text-align:left">Property</th>
+              ${cardsHead}
+            </tr>
+          </thead>
+          <tbody>${attrRows}${notesRow}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function shortlistHead(reqId, r) {
+    const p = r.Property || {};
+    const photo = p.PhotoUrl;
+    const src   = p.InventorySource || 'Own';
+    const srcColor = src === 'Builder' ? '#2563eb' : src === 'Broker' ? '#7c3aed' : '#d97706';
+    const srcLabel = src === 'Builder' ? '🏗️' : src === 'Broker' ? '🤝' : '⭐';
+    const score = r.MatchScore != null ? `<span style="background:#eef2ff;color:#3730a3;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700">${r.MatchScore} ${esc(r.MatchLevel || '')}</span>` : '';
+    return `<th style="padding:8px 10px;text-align:left;min-width:220px;background:#fff;border-bottom:1px solid #fde68a">
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <div style="flex-shrink:0;width:56px;height:44px;background:#f4ede0;border-radius:6px;overflow:hidden;position:relative">
+          ${photo ? `<img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover" />` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:18px">📷</div>'}
+          <span style="position:absolute;top:1px;right:1px;background:${srcColor};color:#fff;font-size:9px;padding:0 3px;border-radius:6px;font-weight:700">${srcLabel}</span>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:12.5px;color:var(--clr-brown);line-height:1.25;white-space:normal">${esc(p.Title || r.PropertyID)}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;align-items:center">
+            ${score}
+            <button data-testid="sl-remove-${esc(r.PropertyID)}" onclick="removeFromShortlist('${esc(reqId)}','${esc(r.PropertyID)}')" style="background:#fee2e2;color:#991b1b;border:none;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✕ Remove</button>
+          </div>
+        </div>
+      </div>
+    </th>`;
+  }
+
+  async function addToShortlist(reqId, propertyId, matchScore, matchLevel) {
+    try {
+      const res = await fetch(`/api/v2/shortlist/${encodeURIComponent(reqId)}/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId, matchScore, matchLevel })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      await loadShortlistForReq(reqId);
+      // Re-render smart match cards to reflect new state
+      const matches = (workspace._lastMatches || {})[reqId];
+      if (matches) {
+        const content = document.getElementById(`mm-content-${reqId}`);
+        if (content) content.innerHTML = matches.map(mm => smartMatchCard(mm, reqId)).join('');
+      }
+      // If shortlist panel visible, refresh
+      const slWrap = document.getElementById(`sl-${reqId}`);
+      if (slWrap && slWrap.style.display !== 'none') renderShortlist(reqId);
+    } catch (e) {
+      alert('Shortlist add failed: ' + e.message);
+    }
+  }
+
+  async function removeFromShortlist(reqId, propertyId) {
+    try {
+      const res = await fetch(`/api/v2/shortlist/${encodeURIComponent(reqId)}/remove/${encodeURIComponent(propertyId)}`, { method: 'DELETE' })
+        .then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      await loadShortlistForReq(reqId);
+      const matches = (workspace._lastMatches || {})[reqId];
+      if (matches) {
+        const content = document.getElementById(`mm-content-${reqId}`);
+        if (content) content.innerHTML = matches.map(mm => smartMatchCard(mm, reqId)).join('');
+      }
+      const slWrap = document.getElementById(`sl-${reqId}`);
+      if (slWrap && slWrap.style.display !== 'none') renderShortlist(reqId);
+    } catch (e) {
+      alert('Shortlist remove failed: ' + e.message);
+    }
+  }
+
+  async function saveShortlistNote(reqId, propertyId, notes) {
+    try {
+      const res = await fetch(`/api/v2/shortlist/${encodeURIComponent(reqId)}/notes/${encodeURIComponent(propertyId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      // Update in-memory cache without re-rendering (keeps focus)
+      const rows = (workspace._shortlist || {})[reqId] || [];
+      const row = rows.find(r => r.PropertyID === propertyId);
+      if (row) row.Notes = notes;
+    } catch (e) {
+      alert('Note save failed: ' + e.message);
     }
   }
 
@@ -2049,6 +2226,10 @@
     const levelColor = m.MatchLevel === 'Excellent' ? '#16a34a' : m.MatchLevel === 'Strong' ? '#0284c7' : m.MatchLevel === 'Possible' ? '#d97706' : '#94a3b8';
     const facts = (m.Breakdown || []).filter(b => b.v > 0).slice(0, 4).map(b => `<span style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 7px;border-radius:10px;font-weight:600">${esc(b.note)}</span>`).join(' ');
     const misses = (m.Breakdown || []).filter(b => b.v === 0).slice(0, 2).map(b => `<span style="font-size:11px;background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:10px;font-weight:600">${esc(b.note)}</span>`).join(' ');
+    const isShortlisted = (workspace._shortlistedIds?.[reqId] || new Set()).has(m.PropertyID);
+    const slBtn = isShortlisted
+      ? `<button data-testid="mm-shortlist-${esc(m.PropertyID)}" onclick="removeFromShortlist('${esc(reqId)}','${esc(m.PropertyID)}')" style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">⭐ Shortlisted ✓</button>`
+      : `<button data-testid="mm-shortlist-${esc(m.PropertyID)}" onclick="addToShortlist('${esc(reqId)}','${esc(m.PropertyID)}',${m.Score||0},'${esc(m.MatchLevel||'')}')" style="background:#fff;color:#92400e;border:1px solid #fbbf24;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">☆ Shortlist</button>`;
     return `<div class="mm-card" data-testid="mm-card-${esc(m.PropertyID)}" style="display:flex;gap:12px;padding:10px;background:#fff;border-radius:8px;border:1px solid var(--clr-border);margin-bottom:8px;align-items:flex-start">
       <div style="flex-shrink:0;width:96px;height:80px;background:#f4ede0;border-radius:6px;overflow:hidden;position:relative">
         ${photo ? `<img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover" />` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:24px">📷</div>'}
@@ -2065,7 +2246,10 @@
           </div>
         </div>
         <div style="font-size:11.5px;color:#6b7280;margin:3px 0">${esc(m.SubCategory || '')} • ${esc(m.Location1 || '—')}${m.SocietyName ? ' • ' + esc(m.SocietyName) : ''} • ${esc(price)}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${facts}${misses}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;align-items:center;justify-content:space-between">
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${facts}${misses}</div>
+          ${slBtn}
+        </div>
       </div>
     </div>`;
   }

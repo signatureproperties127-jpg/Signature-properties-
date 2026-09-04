@@ -19,7 +19,31 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 7 (Sep 4, 2026 latest)
+## What's Been Implemented — Session 8 (Sep 4, 2026)
+
+### Shortlist V2 (Requirement → Properties, notes-aware)
+- **New service**: `src/services/shortlistServiceV2.js` — property-level shortlist per requirement using existing `Shortlists` collection. Does NOT require a persisted Match record (Smart Match V2 scores are live); accepts `matchScore` + `matchLevel` at add-time so compare view keeps the score even if inventory changes later.
+- **API endpoints (all authenticated)**:
+  - `GET    /api/v2/shortlist/:reqId?status=Active` — list shortlisted properties (default Active only). Each row returns a `Property` snapshot (Title, Category, SubCategory, Location1, SocietyName, AskingPrice, RatePerSqFt, CarpetArea, BHK, Furnishing, Source, ListingFor, Status, PhotoUrl) + Notes + MatchScore/Level.
+  - `POST   /api/v2/shortlist/:reqId/add`  `{ propertyId, notes?, priority?, matchScore?, matchLevel? }` — idempotent (returns `alreadyShortlisted:true` for existing Active row and merges any provided notes/priority/score).
+  - `DELETE /api/v2/shortlist/:reqId/remove/:propertyId` — soft delete (status=Removed).
+  - `PATCH  /api/v2/shortlist/:reqId/notes/:propertyId` `{ notes, priority? }` — update notes/priority on active entry.
+- **Validation**: 404 when requirement or property doesn't exist; 400 on missing propertyId; re-adding a previously Removed combo creates a fresh Active row.
+
+### Client Workspace UI
+- **⭐ Shortlist button** added to every requirement card footer alongside 🎯 Smart Match.
+- **Inline ⭐ Shortlist / Shortlisted ✓ toggle** on each Smart Match result card (data-testid `mm-shortlist-<PropertyID>`). Turns yellow when active.
+- **Compare view** — dedicated Shortlist panel (yellow) directly below the Smart Match panel:
+  - Property header row with photo + source badge (⭐ Own / 🏗️ Builder / 🤝 Broker) + Match Score pill + ✕ Remove
+  - Side-by-side rows: Price, Rate / sqft, Carpet Area, BHK, Furnishing, Location + Society, Sub-category, Source, Status
+  - Editable Notes textarea per property (saved on blur via PATCH endpoint)
+  - Horizontal scroll for 3+ shortlisted properties on smaller screens
+- **State sync**: Smart Match cards re-render after Add/Remove so the button always reflects live shortlist state; toggling Smart Match auto-primes the shortlist cache so the initial card render is already correct.
+- **Verified end-to-end** via curl (add/list/patch/delete/re-add/invalid ids) and Playwright screenshot on LEAD-0001 → R000199: shortlisted 50/Possible office → "⭐ Shortlisted ✓" state + compare panel renders "1 property" with all attributes and Remove button.
+
+
+
+
 
 ### Smart Match V2 (Requirement → Inventory)
 - **New `src/services/smartMatchService.js`** — V2-aware matching engine

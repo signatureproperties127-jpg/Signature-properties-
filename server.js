@@ -205,6 +205,53 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    // ── Shortlist V2 (property-level shortlist per requirement, notes-aware) ─
+    // GET    /api/v2/shortlist/:reqId
+    // POST   /api/v2/shortlist/:reqId/add          { propertyId, notes?, priority?, matchScore?, matchLevel? }
+    // DELETE /api/v2/shortlist/:reqId/remove/:propId
+    // PATCH  /api/v2/shortlist/:reqId/notes/:propId { notes }
+    const slV2List   = pathname.match(/^\/api\/v2\/shortlist\/([^\/]+)\/?$/i);
+    const slV2Add    = pathname.match(/^\/api\/v2\/shortlist\/([^\/]+)\/add\/?$/i);
+    const slV2Remove = pathname.match(/^\/api\/v2\/shortlist\/([^\/]+)\/remove\/([^\/]+)\/?$/i);
+    const slV2Notes  = pathname.match(/^\/api\/v2\/shortlist\/([^\/]+)\/notes\/([^\/]+)\/?$/i);
+    if (slV2List || slV2Add || slV2Remove || slV2Notes) {
+      const { ShortlistServiceV2 } = require('./src/services/shortlistServiceV2');
+      const svc = new ShortlistServiceV2(runtime.repository);
+
+      if (slV2List && req.method === 'GET') {
+        const status = url.searchParams.get('status') || 'Active';
+        const rows = svc.list(slV2List[1], { status });
+        sendJson(res, { ok: true, data: rows, count: rows.length });
+        return;
+      }
+
+      if (slV2Add && req.method === 'POST') {
+        const body = bodyForV2 || {};
+        const out = svc.add(slV2Add[1], body);
+        sendJson(res, out, out.ok ? (out.alreadyShortlisted ? 200 : 201) : 400);
+        return;
+      }
+
+      if (slV2Remove && req.method === 'DELETE') {
+        const out = svc.remove(slV2Remove[1], slV2Remove[2], 'system');
+        sendJson(res, out, out.ok ? 200 : 404);
+        return;
+      }
+
+      if (slV2Notes && req.method === 'PATCH') {
+        const body = bodyForV2 || {};
+        const out = svc.updateEntry(slV2Notes[1], slV2Notes[2], {
+          notes: body.notes,
+          priority: body.priority
+        });
+        sendJson(res, out, out.ok ? 200 : 404);
+        return;
+      }
+
+      sendJson(res, { ok: false, error: 'Method not supported' }, 405);
+      return;
+    }
+
     // ── Inventory / Property APIs ────────────────────────────────────────────
     const invMatch = pathname.match(/^\/api\/v2\/inventory(?:\/([^\/]+))?(?:\/(photos|photos\/[^\/]+))?\/?$/i);
     if (invMatch) {
