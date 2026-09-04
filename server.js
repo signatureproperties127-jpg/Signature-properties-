@@ -252,6 +252,67 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    // ── Site Visit Bookings V2 (group N properties into one visit slot) ─────
+    // POST   /api/v2/site-visit-bookings                { requirementId, propertyIds[], visitDate, visitTime, ... }
+    // GET    /api/v2/site-visit-bookings?requirementId=X | ?leadId=X
+    // GET    /api/v2/site-visit-bookings/:bookingId
+    // PATCH  /api/v2/site-visit-bookings/:bookingId     { visitDate?, visitTime?, ... }
+    // POST   /api/v2/site-visit-bookings/:bookingId/cancel
+    // POST   /api/v2/site-visit-bookings/:bookingId/complete
+    if (/^\/api\/v2\/site-visit-bookings(?:\/[^\/]*(?:\/(?:cancel|complete))?)?\/?$/i.test(pathname)) {
+      const { SiteVisitBookingService } = require('./src/services/siteVisitBookingService');
+      const svc = new SiteVisitBookingService(runtime.repository);
+
+      // Collection routes
+      if (/^\/api\/v2\/site-visit-bookings\/?$/i.test(pathname)) {
+        if (req.method === 'GET') {
+          const requirementId = url.searchParams.get('requirementId');
+          const leadId = url.searchParams.get('leadId');
+          if (!requirementId && !leadId) {
+            sendJson(res, { ok: false, error: 'requirementId or leadId query required' }, 400);
+            return;
+          }
+          const data = requirementId ? svc.listByRequirement(requirementId) : svc.listByLead(leadId);
+          sendJson(res, { ok: true, data, count: data.length });
+          return;
+        }
+        if (req.method === 'POST') {
+          const out = svc.create(bodyForV2 || {});
+          sendJson(res, out, out.ok ? 201 : 400);
+          return;
+        }
+      }
+
+      // Sub-resource: /:bookingId, /:bookingId/cancel, /:bookingId/complete
+      const bookingMatch = pathname.match(/^\/api\/v2\/site-visit-bookings\/([^\/]+)(?:\/(cancel|complete))?\/?$/i);
+      if (bookingMatch) {
+        const [, bookingId, action] = bookingMatch;
+        if (!action && req.method === 'GET') {
+          const out = svc.get(bookingId);
+          sendJson(res, out, out.ok ? 200 : 404);
+          return;
+        }
+        if (!action && req.method === 'PATCH') {
+          const out = svc.update(bookingId, bodyForV2 || {});
+          sendJson(res, out, out.ok ? 200 : 404);
+          return;
+        }
+        if (action === 'cancel' && req.method === 'POST') {
+          const out = svc.cancel(bookingId);
+          sendJson(res, out, out.ok ? 200 : 404);
+          return;
+        }
+        if (action === 'complete' && req.method === 'POST') {
+          const out = svc.complete(bookingId);
+          sendJson(res, out, out.ok ? 200 : 404);
+          return;
+        }
+      }
+
+      sendJson(res, { ok: false, error: 'Method not supported' }, 405);
+      return;
+    }
+
     // ── Inventory / Property APIs ────────────────────────────────────────────
     const invMatch = pathname.match(/^\/api\/v2\/inventory(?:\/([^\/]+))?(?:\/(photos|photos\/[^\/]+))?\/?$/i);
     if (invMatch) {

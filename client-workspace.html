@@ -691,6 +691,49 @@
   </div>
 </div>
 
+<div id="schedule-visit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center" data-testid="schedule-visit-modal">
+  <div style="background:#fff;border-radius:12px;padding:0;width:min(560px,92vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--clr-border);display:flex;justify-content:space-between;align-items:center;background:#0f766e;color:#fff;border-radius:12px 12px 0 0">
+      <div style="font-size:16px;font-weight:700">🏠 Schedule Site Visit</div>
+      <button onclick="closeScheduleVisitModal()" style="background:transparent;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1" data-testid="sv-modal-close">×</button>
+    </div>
+    <div style="padding:16px 20px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#0f766e;margin-bottom:8px;letter-spacing:.03em">Properties to visit</div>
+      <div id="sv-prop-list" style="max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#0f766e;margin-bottom:8px;letter-spacing:.03em">Visit slot</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="display:block;font-size:11.5px;color:#4b5563;margin-bottom:4px;font-weight:600">Date</label>
+          <input id="sv-date" type="date" data-testid="sv-date" style="width:100%;padding:8px;border:1px solid var(--clr-border);border-radius:6px;font-size:13px;font-family:inherit" />
+        </div>
+        <div>
+          <label style="display:block;font-size:11.5px;color:#4b5563;margin-bottom:4px;font-weight:600">Time</label>
+          <input id="sv-time" type="time" data-testid="sv-time" style="width:100%;padding:8px;border:1px solid var(--clr-border);border-radius:6px;font-size:13px;font-family:inherit" />
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11.5px;color:#4b5563;margin-bottom:4px;font-weight:600">Duration</label>
+        <select id="sv-duration" data-testid="sv-duration" style="width:100%;padding:8px;border:1px solid var(--clr-border);border-radius:6px;font-size:13px;font-family:inherit">
+          <option>30 mins</option><option>60 mins</option><option selected>90 mins</option><option>2 hrs</option><option>Half day</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11.5px;color:#4b5563;margin-bottom:4px;font-weight:600">Meeting Point</label>
+        <input id="sv-meeting" type="text" data-testid="sv-meeting" placeholder="e.g. Vesu Char Rasta, first property gate…" style="width:100%;padding:8px;border:1px solid var(--clr-border);border-radius:6px;font-size:13px;font-family:inherit" />
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11.5px;color:#4b5563;margin-bottom:4px;font-weight:600">Notes</label>
+        <textarea id="sv-notes" rows="2" data-testid="sv-notes" placeholder="Route plan, client preferences…" style="width:100%;padding:8px;border:1px solid var(--clr-border);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--clr-border);display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="closeScheduleVisitModal()" style="padding:9px 16px;border:1px solid var(--clr-border);border-radius:8px;background:#fff;color:#4b5563;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+      <button id="sv-submit-btn" onclick="submitScheduleVisit()" data-testid="sv-submit-btn" style="padding:9px 16px;border:none;border-radius:8px;background:#0f766e;color:#fff;font-size:13px;font-weight:700;cursor:pointer">Confirm Booking</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const LEAD_ID = new URLSearchParams(location.search).get('id');
   let workspace = null;
@@ -2059,16 +2102,22 @@
   async function loadShortlistForReq(reqId, silent = false) {
     workspace._shortlist = workspace._shortlist || {};
     workspace._shortlistedIds = workspace._shortlistedIds || {};
+    workspace._bookings = workspace._bookings || {};
     try {
-      const res = await fetch(`/api/v2/shortlist/${encodeURIComponent(reqId)}?status=Active`).then(r => r.json());
-      if (!res.ok) throw new Error(res.error || 'Failed');
-      workspace._shortlist[reqId] = res.data || [];
-      workspace._shortlistedIds[reqId] = new Set((res.data || []).map(r => r.PropertyID));
+      const [slRes, bkRes] = await Promise.all([
+        fetch(`/api/v2/shortlist/${encodeURIComponent(reqId)}?status=Active`).then(r => r.json()),
+        fetch(`/api/v2/site-visit-bookings?requirementId=${encodeURIComponent(reqId)}`).then(r => r.json()).catch(() => ({ ok: true, data: [] }))
+      ]);
+      if (!slRes.ok) throw new Error(slRes.error || 'Failed');
+      workspace._shortlist[reqId] = slRes.data || [];
+      workspace._shortlistedIds[reqId] = new Set((slRes.data || []).map(r => r.PropertyID));
+      workspace._bookings[reqId] = (bkRes && bkRes.ok) ? (bkRes.data || []) : [];
       return workspace._shortlist[reqId];
     } catch (e) {
       if (!silent) console.warn('Shortlist load failed', e);
       workspace._shortlist[reqId] = workspace._shortlist[reqId] || [];
       workspace._shortlistedIds[reqId] = workspace._shortlistedIds[reqId] || new Set();
+      workspace._bookings[reqId] = workspace._bookings[reqId] || [];
       return workspace._shortlist[reqId];
     }
   }
@@ -2090,9 +2139,20 @@
     const title = document.getElementById(`sl-title-${reqId}`);
     if (!wrap || !content) return;
     const rows = (workspace._shortlist || {})[reqId] || [];
-    if (title) title.innerHTML = `⭐ Shortlist <span style="color:#92400e;font-weight:500;text-transform:none;letter-spacing:0">— ${rows.length} propert${rows.length === 1 ? 'y' : 'ies'}</span>`;
+    const bookings = (workspace._bookings || {})[reqId] || [];
+    const activeBookings = bookings.filter(b => b.Status !== 'Cancelled');
+    if (title) title.innerHTML = `⭐ Shortlist <span style="color:#92400e;font-weight:500;text-transform:none;letter-spacing:0">— ${rows.length} propert${rows.length === 1 ? 'y' : 'ies'}${activeBookings.length ? ` · 🏠 ${activeBookings.length} visit${activeBookings.length === 1 ? '' : 's'} booked` : ''}</span>`;
+
+    let bookingsSection = '';
+    if (bookings.length) {
+      bookingsSection = `<div style="margin-top:14px" data-testid="booked-visits-${esc(reqId)}">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#92400e;margin-bottom:8px">🏠 Booked Site Visits</div>
+        ${bookings.map(b => bookingCard(reqId, b)).join('')}
+      </div>`;
+    }
+
     if (!rows.length) {
-      content.innerHTML = `<div style="padding:16px;text-align:center;color:#92400e;font-size:12.5px">No properties shortlisted yet. Open <b>🎯 Smart Match</b> and tap <b>☆ Shortlist</b> on any card.</div>`;
+      content.innerHTML = `<div style="padding:16px;text-align:center;color:#92400e;font-size:12.5px">No properties shortlisted yet. Open <b>🎯 Smart Match</b> and tap <b>☆ Shortlist</b> on any card.</div>${bookingsSection}`;
       return;
     }
     // Side-by-side compare table (horizontal scroll on small screens)
@@ -2122,6 +2182,9 @@
         </td>`).join('')}
       </tr>`;
     content.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button data-testid="sv-schedule-${esc(reqId)}" onclick="openScheduleVisitModal('${esc(reqId)}')" style="background:#0f766e;color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">🏠 Schedule Site Visit</button>
+      </div>
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
         <table style="border-collapse:separate;border-spacing:0;background:#fff;border-radius:8px;border:1px solid #fde68a;width:100%;min-width:${Math.max(600, 160 + colWidth * rows.length)}px">
           <thead>
@@ -2132,7 +2195,34 @@
           </thead>
           <tbody>${attrRows}${notesRow}</tbody>
         </table>
-      </div>`;
+      </div>
+      ${bookingsSection}`;
+  }
+
+  function bookingCard(reqId, b) {
+    const statusColor = b.Status === 'Completed' ? '#065f46' : b.Status === 'Cancelled' ? '#991b1b' : b.Status === 'Confirmed' ? '#0369a1' : '#92400e';
+    const statusBg = b.Status === 'Completed' ? '#d1fae5' : b.Status === 'Cancelled' ? '#fee2e2' : b.Status === 'Confirmed' ? '#dbeafe' : '#fef3c7';
+    const dt = b.VisitDate ? new Date(b.VisitDate + 'T' + (b.VisitTime || '00:00')) : null;
+    const dtStr = dt ? dt.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+    const props = (b.Properties || []).map(p => `<span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #fde68a;padding:2px 8px;border-radius:12px;font-size:11.5px;color:#1f2937;margin:2px 3px 0 0">${esc(p.Title || p.PropertyID)}<span style="color:#94a3b8;font-size:10px">·${esc(p.Location1||'—')}</span></span>`).join('');
+    const actions = b.Status === 'Cancelled' || b.Status === 'Completed' ? '' : `
+      <button data-testid="sv-complete-${esc(b.VisitBookingID)}" onclick="completeBooking('${esc(reqId)}','${esc(b.VisitBookingID)}')" style="background:#d1fae5;color:#065f46;border:none;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">✓ Mark Complete</button>
+      <button data-testid="sv-cancel-${esc(b.VisitBookingID)}" onclick="cancelBooking('${esc(reqId)}','${esc(b.VisitBookingID)}')" style="background:#fee2e2;color:#991b1b;border:none;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">✕ Cancel</button>`;
+    return `<div data-testid="booking-${esc(b.VisitBookingID)}" style="background:#fff;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;color:#1f2937;font-size:13px">📅 ${esc(dtStr)}</div>
+          <div style="font-size:11.5px;color:#6b7280;margin-top:2px">
+            ${b.MeetingPoint ? `📍 ${esc(b.MeetingPoint)} · ` : ''}${esc(b.Duration || '')}
+            ${b.ClientPhone ? ` · <a href="tel:${esc(b.ClientPhone.replace(/\D/g,''))}" style="color:#0f766e;font-weight:600">${esc(b.ClientPhone)}</a>` : ''}
+          </div>
+        </div>
+        <span style="background:${statusBg};color:${statusColor};padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em">${esc(b.Status)}</span>
+      </div>
+      <div style="margin-top:8px;line-height:1.9">${props}</div>
+      ${b.Notes ? `<div style="margin-top:6px;font-size:12px;color:#4b5563;font-style:italic">📝 ${esc(b.Notes)}</div>` : ''}
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${actions}</div>
+    </div>`;
   }
 
   function shortlistHead(reqId, r) {
@@ -2262,6 +2352,95 @@
     if (n >= 1e7) return '₹' + (n/1e7).toFixed(2) + ' Cr';
     if (n >= 1e5) return '₹' + (n/1e5).toFixed(1) + ' L';
     return '₹' + n.toLocaleString('en-IN');
+  }
+
+  // ── Schedule Site Visit Modal ────────────────────────────────────────────
+  function openScheduleVisitModal(reqId) {
+    const rows = (workspace._shortlist || {})[reqId] || [];
+    if (!rows.length) { alert('Shortlist ek property to karo pehle.'); return; }
+    // Default date = tomorrow, time = 11:00
+    const t = new Date(); t.setDate(t.getDate() + 1);
+    const yyyy = t.getFullYear(), mm = String(t.getMonth() + 1).padStart(2, '0'), dd = String(t.getDate()).padStart(2, '0');
+    const defaultDate = `${yyyy}-${mm}-${dd}`;
+    const propRows = rows.map(r => {
+      const p = r.Property || {};
+      const price = fmtInrShort(p.AskingPrice, p.ListingFor);
+      return `<label style="display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--clr-border);border-radius:8px;cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" class="sv-prop-cb" value="${esc(r.PropertyID)}" checked data-testid="sv-prop-cb-${esc(r.PropertyID)}" />
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px;color:var(--clr-brown)">${esc(p.Title || r.PropertyID)}</div>
+          <div style="font-size:11.5px;color:#6b7280">${esc(p.SubCategory || '—')} · ${esc(p.Location1 || '—')} · ${esc(price)}</div>
+        </div>
+      </label>`;
+    }).join('');
+    const modal = document.getElementById('schedule-visit-modal');
+    modal.dataset.reqId = reqId;
+    modal.querySelector('#sv-date').value = defaultDate;
+    modal.querySelector('#sv-time').value = '11:00';
+    modal.querySelector('#sv-duration').value = '90 mins';
+    modal.querySelector('#sv-meeting').value = '';
+    modal.querySelector('#sv-notes').value = '';
+    modal.querySelector('#sv-prop-list').innerHTML = propRows;
+    modal.style.display = 'flex';
+  }
+
+  function closeScheduleVisitModal() {
+    document.getElementById('schedule-visit-modal').style.display = 'none';
+  }
+
+  async function submitScheduleVisit() {
+    const modal = document.getElementById('schedule-visit-modal');
+    const reqId = modal.dataset.reqId;
+    const propertyIds = Array.from(modal.querySelectorAll('.sv-prop-cb'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+    if (!propertyIds.length) { alert('At least ek property select karo'); return; }
+    const visitDate = modal.querySelector('#sv-date').value;
+    const visitTime = modal.querySelector('#sv-time').value;
+    if (!visitDate || !visitTime) { alert('Date aur time daalo'); return; }
+    const body = {
+      requirementId: reqId,
+      propertyIds,
+      visitDate,
+      visitTime,
+      duration: modal.querySelector('#sv-duration').value,
+      meetingPoint: modal.querySelector('#sv-meeting').value,
+      notes: modal.querySelector('#sv-notes').value
+    };
+    try {
+      const btn = modal.querySelector('#sv-submit-btn');
+      btn.disabled = true; btn.textContent = 'Booking...';
+      const res = await fetch('/api/v2/site-visit-bookings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(r => r.json());
+      btn.disabled = false; btn.textContent = 'Confirm Booking';
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      closeScheduleVisitModal();
+      await loadShortlistForReq(reqId);
+      renderShortlist(reqId);
+    } catch (e) {
+      alert('Booking failed: ' + e.message);
+    }
+  }
+
+  async function cancelBooking(reqId, bookingId) {
+    if (!confirm('Cancel this site visit?')) return;
+    try {
+      const res = await fetch(`/api/v2/site-visit-bookings/${encodeURIComponent(bookingId)}/cancel`, { method: 'POST' }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      await loadShortlistForReq(reqId);
+      renderShortlist(reqId);
+    } catch (e) { alert('Cancel failed: ' + e.message); }
+  }
+
+  async function completeBooking(reqId, bookingId) {
+    try {
+      const res = await fetch(`/api/v2/site-visit-bookings/${encodeURIComponent(bookingId)}/complete`, { method: 'POST' }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      await loadShortlistForReq(reqId);
+      renderShortlist(reqId);
+    } catch (e) { alert('Complete failed: ' + e.message); }
   }
 
   function openSiteVisitsContext(reqId) {

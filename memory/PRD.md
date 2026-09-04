@@ -19,7 +19,35 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 8 (Sep 4, 2026)
+## What's Been Implemented — Session 9 (Sep 4, 2026)
+
+### Site Visit Booking V2 (multi-property visit slot per client)
+- **New service**: `src/services/siteVisitBookingService.js` — group N shortlisted properties into a single visit slot for one client. Persists to the existing `SiteVisits` collection with a shared `VisitBookingID` linking all rows. Bypasses the strict legacy `createSiteVisit` (which requires a Match record) so it works with SmartMatch V2 + Shortlist V2.
+- **API endpoints** (auth required):
+  - `POST   /api/v2/site-visit-bookings` — `{ requirementId, propertyIds[], visitDate, visitTime, duration?, meetingPoint?, notes?, assignedAgentId? }` → creates N SiteVisit rows sharing `VisitBookingID`. Auto-fills `ClientName` + `ClientPhone` from lead.
+  - `GET    /api/v2/site-visit-bookings?requirementId=X | ?leadId=X` — grouped booking list, sorted latest first
+  - `GET    /api/v2/site-visit-bookings/:bookingId` — single booking view
+  - `PATCH  /api/v2/site-visit-bookings/:bookingId` — reschedule (visitDate/visitTime/duration/meetingPoint/notes/status)
+  - `POST   /api/v2/site-visit-bookings/:bookingId/cancel` — cancels all visits in the booking
+  - `POST   /api/v2/site-visit-bookings/:bookingId/complete` — marks completed
+- **Timeline**: each booking writes a `SITE_VISIT_SCHEDULED` timeline entry on the lead.
+- **Validation**: 400 on missing requirementId / propertyIds / visitDate / visitTime; 400 with joined ID list when any property doesn't exist; 404 on unknown bookingId.
+
+### Client Workspace UI (embedded in Shortlist panel)
+- **🏠 Schedule Site Visit button** at the top-right of the Shortlist compare view. Opens a modal listing all shortlisted properties as checkboxes (pre-checked); broker de-selects any they don't want to include, picks Date (defaults to tomorrow) + Time (default 11:00) + Duration + Meeting Point + Notes and hits **Confirm Booking**.
+- **Booked Site Visits section** rendered directly below the compare table:
+  - Human-readable slot: "Sun, 20 Sept, 11:00 am · 📍 Ghod Dod Road · 90 mins · +91 98765 43210" with a clickable `tel:` link
+  - Status pill (SCHEDULED/CONFIRMED/COMPLETED/CANCELLED) colour-coded
+  - Property chips for every included property with location subtext
+  - Notes shown inline in italics
+  - Per-booking action buttons: ✓ Mark Complete · ✕ Cancel (hidden once status is terminal)
+- **Header counter** updates: "⭐ Shortlist — 2 properties · 🏠 1 visit booked".
+- **State sync**: after any booking create/cancel/complete, the shortlist cache reloads and re-renders so counters and status pills stay live.
+- **Verified end-to-end** via curl (create with 2 props, list-by-req, patch reschedule, cancel, complete, invalid payloads) and Playwright screenshot on LEAD-0001 → R000199 → 2 shortlisted properties + booking for Sun 20 Sept 11:00 with 2 properties visible in compare view + Booked Site Visits panel.
+
+
+
+
 
 ### Shortlist V2 (Requirement → Properties, notes-aware)
 - **New service**: `src/services/shortlistServiceV2.js` — property-level shortlist per requirement using existing `Shortlists` collection. Does NOT require a persisted Match record (Smart Match V2 scores are live); accepts `matchScore` + `matchLevel` at add-time so compare view keeps the score even if inventory changes later.
