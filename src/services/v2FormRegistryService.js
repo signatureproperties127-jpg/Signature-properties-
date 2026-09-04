@@ -246,26 +246,70 @@ class V2FormRegistryService {
 
     // 3. Resolve fields from the static form definition, enriched with FieldConfig metadata
     const rawFields     = Object.values(staticForm.fields || {});
-    const resolvedFields = rawFields.map((f) => {
+    const resolvedFieldMap = new Map();
+    const seenKeysLower = new Set();
+    rawFields.forEach((f) => {
       const fKey = f.fieldId || f.FieldKey || f.id;
-      const meta = fieldConfigMap[fKey] || {};
-      return {
+      if (seenKeysLower.has(fKey.toLowerCase())) return;
+      seenKeysLower.add(fKey.toLowerCase());
+      const meta = fieldConfigMap[fKey] || fieldConfigMap[Object.keys(fieldConfigMap).find(k => k.toLowerCase() === fKey.toLowerCase())] || {};
+      // If V2FieldConfig meta has Options + Type=Autocomplete, promote FieldType to Autocomplete
+      const metaOpts = Array.isArray(meta.Options) && meta.Options.length ? meta.Options : null;
+      let fieldType = f.fieldType || meta.FieldType || 'Text';
+      if (metaOpts && (meta.FieldType === 'Autocomplete' || fieldType === 'Text')) {
+        fieldType = 'Autocomplete';
+      }
+      resolvedFieldMap.set(fKey, {
         FieldKey:      fKey,
         FieldLabel:    f.fieldLabel   || meta.FieldLabel   || fKey,
         QuestionLabel: meta.QuestionLabel || f.fieldLabel  || `What is ${fKey}?`,
-        FieldType:     f.fieldType    || meta.FieldType    || 'Text',
+        FieldType:     fieldType,
         Tier:          meta.Tier          || 'OPTIONAL',
         RequiredMode:  meta.RequiredMode  || 'OPTIONAL',
         Section:       meta.Section       || 'Property Details',
-        Options:       f.options      || meta.Options || [],
+        Options:       metaOpts || (f.options || []),
         Validation:    f.validation   || meta.Validation   || null,
         DisplayOrder:  f.displayOrder || meta.DisplayOrder || 99,
-        Required:      f.required     || false,  // UI hint only — NEVER server enforcement
+        Required:      f.required     || false,
         Active:        f.active       !== false,
         HelpText:      meta.HelpText  || null,
         Placeholder:   meta.Placeholder || f.placeholder || null
-      };
-    }).sort((a, b) => (a.DisplayOrder || 99) - (b.DisplayOrder || 99));
+      });
+    });
+
+    // 3b. Auto-include additional V2FieldConfig entries that match this context.
+    // Rule: if a FieldConfig row's TransactionType/Category are null (global) OR match the current
+    // form's context, AND the field is Active and not already included, add it.
+    // This makes the form FULLY DYNAMIC — add rows to V2FieldConfig and they appear here.
+    for (const fc of allFieldConfig) {
+      if (fc.Active === false) continue;
+      if (seenKeysLower.has(fc.FieldKey.toLowerCase())) continue;
+      const txnMatch = !fc.TransactionType || fc.TransactionType === txnType;
+      const catMatch = !fc.Category        || fc.Category        === category;
+      const subMatch = !fc.SubCategory     || fc.SubCategory     === subCategory;
+      if (txnMatch && catMatch && subMatch) {
+        seenKeysLower.add(fc.FieldKey.toLowerCase());
+        resolvedFieldMap.set(fc.FieldKey, {
+          FieldKey:      fc.FieldKey,
+          FieldLabel:    fc.FieldLabel   || fc.FieldKey,
+          QuestionLabel: fc.QuestionLabel || fc.FieldLabel || `What is ${fc.FieldKey}?`,
+          FieldType:     fc.FieldType    || 'Text',
+          Tier:          fc.Tier          || 'OPTIONAL',
+          RequiredMode:  fc.RequiredMode  || 'OPTIONAL',
+          Section:       fc.Section       || 'Property Details',
+          Options:       Array.isArray(fc.Options) ? fc.Options : [],
+          Validation:    fc.Validation    || null,
+          DisplayOrder:  fc.DisplayOrder  || 99,
+          Required:      false,
+          Active:        true,
+          HelpText:      fc.HelpText      || null,
+          Placeholder:   fc.Placeholder   || null
+        });
+      }
+    }
+
+    const resolvedFields = Array.from(resolvedFieldMap.values())
+      .sort((a, b) => (a.DisplayOrder || 99) - (b.DisplayOrder || 99));
 
     // 4. Questions — QuestionConfig filtered for this context
     const questions = this.configSvc.getQuestionConfig({

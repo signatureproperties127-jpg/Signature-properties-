@@ -6,7 +6,8 @@ const { V2Router } = require('./src/api/v2Router');
 const { SESSION_COOKIE_NAME } = require('./src/services/authService');
 const { GoogleAuthService } = require('./src/services/googleAuthService');
 
-const PORT = process.env.PORT || 4173;
+const PORT = Number(process.env.PORT) || 3000;
+const API_PORT = Number(process.env.API_PORT) || 8001;
 const ROOT = __dirname;
 const runtime = new SignatureRealtyRuntime();
 const TEST_SESSION_FIXTURE_USER_ID = 'USR-0001';
@@ -2020,6 +2021,27 @@ function gracefulShutdown(signal) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-appServer.listen(PORT, () => {
-  console.log(`Signature Properties running at http://localhost:${PORT}`);
+appServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`Signature Properties (frontend) running at http://0.0.0.0:${PORT}`);
 });
+
+// Additional listener for /api routes via Emergent ingress (port 8001)
+if (API_PORT && API_PORT !== PORT) {
+  const apiServer = http.createServer(async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname.startsWith('/api/')) {
+      await handleApi(req, res, url);
+      return;
+    }
+    // Non-API requests on the API port — redirect to main app
+    res.writeHead(302, { Location: req.url });
+    res.end();
+  });
+  apiServer.on('connection', (socket) => {
+    activeSockets.add(socket);
+    socket.on('close', () => activeSockets.delete(socket));
+  });
+  apiServer.listen(API_PORT, '0.0.0.0', () => {
+    console.log(`Signature Properties (api) running at http://0.0.0.0:${API_PORT}`);
+  });
+}

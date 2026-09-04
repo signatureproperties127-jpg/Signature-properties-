@@ -181,6 +181,30 @@ class AuthService {
       };
     }
 
+    // ── Demo mode bypass ──────────────────────────────────────────
+    // When DEMO_MODE=true, auto-authenticate as the first ADMIN user in the DB.
+    // This lets the CRM run without Google OAuth for local/preview evaluation.
+    if (String(process.env.DEMO_MODE || '').toLowerCase() === 'true') {
+      const db = this.repository && typeof this.repository.read === 'function' ? this.repository.read() : {};
+      const admin = (db.Users || []).find(u => String(u.Role||'').toUpperCase() === 'ADMIN' && String(u.Status||'').toLowerCase() === 'active')
+        || (db.Users || [])[0];
+      if (admin) {
+        return {
+          authenticated: true,
+          public: false,
+          sessionId: 'demo-session',
+          actorId: admin.UserID,
+          userId: admin.UserID,
+          role: String(admin.Role||'ADMIN').toUpperCase(),
+          companyId: String(admin.CompanyID || admin.CompanyId || 'COMP-001'),
+          brokerageId: String(admin.BrokerageID || admin.BrokerageId || 'BRK-001'),
+          permissions: ['*'],
+          user: admin,
+          statusCode: 200
+        };
+      }
+    }
+
     const authHeader = headers.authorization || headers.Authorization || '';
     const cookieHeader = headers.cookie || headers.Cookie || '';
     const rawCookieToken = String(cookieHeader)

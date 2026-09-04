@@ -888,11 +888,16 @@ class V2Router {
 
       // Active need summaries (up to 3)
       const needSummaries = leadReqs.slice(0, 3).map(r => {
-        const txn     = leadTxns.find(t => t.TransactionID === r.TransactionID);
-        const budMin  = r.Fields?.BudgetMin?.value ?? r.BudgetMin;
-        const budMax  = r.Fields?.BudgetMax?.value ?? r.BudgetMax;
-        const loc1    = r.Fields?.Location1?.value ?? r.Location1;
-        const bhkMin  = r.Fields?.BHKMin?.value    ?? r.BHKMin;
+        const txn      = leadTxns.find(t => t.TransactionID === r.TransactionID);
+        const budMin   = r.Fields?.BudgetMin?.value ?? r.BudgetMin;
+        const budMax   = r.Fields?.BudgetMax?.value ?? r.BudgetMax;
+        const loc1     = r.Fields?.Location1?.value ?? r.Location1;
+        const loc2     = r.Fields?.Location2?.value ?? r.Location2;
+        const bhkMin   = r.Fields?.BHKMin?.value    ?? r.BHKMin ?? r.BHK;
+        const rpsfMin  = r.Fields?.RatePerSqFtMin?.value ?? r.RatePerSqFtMin;
+        const rpsfMax  = r.Fields?.RatePerSqFtMax?.value ?? r.RatePerSqFtMax;
+        const society  = r.Fields?.SocietyName?.value ?? r.SocietyName;
+        const carpet   = r.Fields?.CarpetArea?.value ?? r.CarpetArea;
         return {
           RequirementID:   r.RequirementID,
           TransactionType: r.TransactionType || txn?.TransactionType,
@@ -901,7 +906,13 @@ class V2Router {
           BudgetMin:       budMin,
           BudgetMax:       budMax,
           Location:        loc1,
+          Location1:       loc1,
+          Location2:       loc2,
           BHK:             bhkMin,
+          RatePerSqFtMin:  rpsfMin,
+          RatePerSqFtMax:  rpsfMax,
+          SocietyName:     society,
+          CarpetArea:      carpet,
           Score:           r.RequirementScore
         };
       });
