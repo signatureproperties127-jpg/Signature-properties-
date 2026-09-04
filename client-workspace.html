@@ -483,52 +483,41 @@
   </div>
 </div>
 
-<!-- ── ADD NEED MODAL (Quick: Transaction + Requirement) ─────────────────── -->
+<!-- ── ADD NEED MODAL (Fully Dynamic Requirement Form) ─────────────────── -->
 <div class="modal-overlay hidden" id="add-need-modal">
-  <div class="modal" style="width:580px">
+  <div class="modal" style="width:820px;max-height:92vh;overflow-y:auto">
     <div class="modal-header">
       <span class="modal-title">New Requirement</span>
-      <button class="modal-close" onclick="closeModal('add-need-modal')">&times;</button>
+      <button class="modal-close" data-testid="close-need-modal" onclick="closeModal('add-need-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group">
           <label>Transaction Type *</label>
-          <select id="need-txn-type">
+          <select id="need-txn-type" data-testid="need-txn-type" onchange="needLoadDynamicForm()">
             <option>Purchase</option><option>Sale</option><option>Rent</option>
             <option>Rent Out</option><option>Lease</option><option>Lease Out</option>
           </select>
         </div>
         <div class="form-group">
           <label>Category *</label>
-          <select id="need-category" onchange="updateNeedSubcats()">
+          <select id="need-category" data-testid="need-category" onchange="updateNeedSubcats(); needLoadDynamicForm()">
             <option value="">Select…</option>
             <option>Residential</option><option>Commercial</option><option>Land</option><option>Industrial</option><option>Agriculture</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Sub Category <span style="font-weight:400;text-transform:none">(optional)</span></label>
-          <select id="need-subcategory"><option value="">Not sure yet</option></select>
-        </div>
-        <div class="form-group">
-          <label>Budget Max (₹) <span style="font-weight:400;text-transform:none">(optional)</span></label>
-          <input id="need-budget-max" type="number" placeholder="e.g. 10000000" />
-        </div>
-        <div class="form-group">
-          <label>Budget Min (₹) <span style="font-weight:400;text-transform:none">(optional)</span></label>
-          <input id="need-budget-min" type="number" placeholder="e.g. 5000000" />
+          <label>Sub Category</label>
+          <select id="need-subcategory" data-testid="need-subcategory" onchange="needLoadDynamicForm()"><option value="">Not sure yet</option></select>
         </div>
       </div>
-      <div style="margin-top:14px">
-        <label style="display:block;margin-bottom:8px">Locations <span style="font-weight:400;text-transform:none">(add one or more)</span></label>
-        <div id="need-locations-list"></div>
-        <button type="button" class="add-location-btn" onclick="addLocationRow()">＋ Add Location</button>
-      </div>
+      <!-- Fully dynamic fields render here based on V2FormRegistry -->
+      <div id="need-dynamic-fields" style="margin-top:16px"></div>
       <div id="add-need-error" class="form-error" style="margin-top:10px"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('add-need-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveAddNeed()" id="need-save-btn">Add Requirement</button>
+      <button class="btn btn-ghost" data-testid="cancel-need-btn" onclick="closeModal('add-need-modal')">Cancel</button>
+      <button class="btn btn-primary" data-testid="save-need-btn" onclick="saveAddNeed()" id="need-save-btn">Add Requirement</button>
     </div>
   </div>
 </div>
@@ -737,7 +726,6 @@
   async function init() {
     if (!LEAD_ID) { showError('No client ID provided'); return; }
     buildSourceSelects();
-    addLocationRow();     // default one location row for Add Need modal
     await loadWorkspace();
     setupTabs();
   }
@@ -1388,16 +1376,15 @@
   }
 
   // ── Add Need modal (Quick: Transaction + Requirement) ─────────────────────────
+  // ── Surat area presets (autocomplete datalist) ────────────────────────────
+  const SURAT_AREAS_WS = ['Adajan','Althan','Anand Mahal Road','Athwa','Bhatar','Bhimrad','Causeway Road','City Light','Dumas Road','Ghod Dod Road','Jahangirpura','Kadodara','Kamrej','Katargam','LP Savani Road','Magdalla','Nanpura','New Textile Market','Nikol','Pal','Palanpur Patiya','Parle Point','Piplod','Puna','Rander','Rustampura','Salabatpura','Sarthana','Singanpore','Tapi Road','Udhna','Umra','Varachha','Vesu','VIP Road'];
+
   function openAddNeedModal() {
     document.getElementById('add-need-error').textContent = '';
     document.getElementById('need-txn-type').value = 'Purchase';
     document.getElementById('need-category').value = '';
     document.getElementById('need-subcategory').innerHTML = '<option value="">Not sure yet</option>';
-    document.getElementById('need-budget-min').value = '';
-    document.getElementById('need-budget-max').value = '';
-    // Reset location rows to one empty row
-    document.getElementById('need-locations-list').innerHTML = '';
-    addLocationRow();
+    document.getElementById('need-dynamic-fields').innerHTML = '<div style="padding:20px;text-align:center;color:#7a6355;font-size:13px">Select Transaction + Category to load fields</div>';
     document.getElementById('add-need-modal').classList.remove('hidden');
   }
 
@@ -1408,13 +1395,95 @@
       '<option value="">Not sure yet</option>' + subs.map(s => `<option>${esc(s)}</option>`).join('');
   }
 
-  function addLocationRow() {
-    const list = document.getElementById('need-locations-list');
-    const row  = document.createElement('div');
-    row.className = 'location-row';
-    row.innerHTML = `<input type="text" placeholder="e.g. Vesu" />
-      <button type="button" title="Remove" onclick="this.parentElement.remove()">×</button>`;
-    list.appendChild(row);
+  // ── Fully-dynamic form loading (uses /api/v2/form-config — 154 fields) ────
+  async function needLoadDynamicForm() {
+    const txnType = document.getElementById('need-txn-type').value;
+    const cat     = document.getElementById('need-category').value;
+    const sub     = document.getElementById('need-subcategory').value || '';
+    const dyn     = document.getElementById('need-dynamic-fields');
+    if (!txnType || !cat) { dyn.innerHTML = '<div style="padding:20px;text-align:center;color:#7a6355;font-size:13px">Select Transaction + Category to load fields</div>'; return; }
+    try {
+      const url = `/api/v2/form-config?transactionType=${encodeURIComponent(txnType)}&category=${encodeURIComponent(cat)}${sub ? '&subCategory='+encodeURIComponent(sub) : ''}`;
+      const res = await fetch(url).then(r => r.json());
+      if (!res.ok || !res.data) { dyn.innerHTML = needBasicFields(); return; }
+
+      // Filter out header/parent fields already in the top selects
+      const HEADER = new Set(['TransactionType','Category','SubCategory','LeadSource','ClientName','PrimaryMobile','Email','City']);
+      const allFields = (res.data.fields || [])
+        .filter(f => f.Active !== false && !HEADER.has(f.FieldKey))
+        .sort((a,b) => (a.DisplayOrder||99) - (b.DisplayOrder||99));
+
+      // Group by Section for cleaner rendering
+      const bySection = {};
+      allFields.forEach(f => {
+        const s = f.Section || 'Details';
+        if (!bySection[s]) bySection[s] = [];
+        bySection[s].push(f);
+      });
+      const SECTION_ORDER = ['Budget','Location','Property','Legal','Client','Details'];
+      const sortedSections = Object.keys(bySection).sort((a,b) => {
+        const ai = SECTION_ORDER.indexOf(a), bi = SECTION_ORDER.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+
+      let html = '';
+      sortedSections.forEach(section => {
+        html += `<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7a6355;margin:6px 0 8px;padding-bottom:4px;border-bottom:1px solid #e8ddd0">${esc(section)}</div>`;
+        html += '<div class="form-grid">';
+        bySection[section].forEach(f => { html += needRenderField(f); });
+        html += '</div></div>';
+      });
+      // Emit datalists for autocomplete fields
+      html += needBuildDatalists(allFields);
+      dyn.innerHTML = html;
+    } catch(e) {
+      dyn.innerHTML = needBasicFields();
+    }
+  }
+
+  function needBasicFields() {
+    return `<div class="form-grid">
+      <div class="form-group"><label>Budget Max (₹)</label><input id="need-fld-BudgetMax" data-field-key="BudgetMax" type="number" placeholder="e.g. 8000000" /></div>
+      <div class="form-group"><label>Primary Location</label><input id="need-fld-Location1" data-field-key="Location1" list="need-dl-Location1" type="text" placeholder="e.g. Vesu" autocomplete="off" /></div>
+    </div><datalist id="need-dl-Location1">${SURAT_AREAS_WS.map(a => `<option value="${a}">`).join('')}</datalist>`;
+  }
+
+  function needBuildDatalists(fields) {
+    return fields.filter(f => f.FieldType === 'Autocomplete' && Array.isArray(f.Options) && f.Options.length)
+      .map(f => `<datalist id="need-dl-${esc(f.FieldKey)}">${f.Options.map(o => `<option value="${esc(o)}">`).join('')}</datalist>`)
+      .join('');
+  }
+
+  function needRenderField(f) {
+    const fk   = f.FieldKey;
+    const id   = `need-fld-${fk}`;
+    const typ  = f.FieldType;
+    const lbl  = f.FieldLabel;
+    const opts = f.Options || [];
+    const hint = f.Placeholder || lbl;
+    const help = f.HelpText || '';
+    const testId = `need-req-field-${fk}`;
+    const isFull = typ === 'Textarea' || typ === 'MultiSelect' || fk === 'SocietyName' || fk === 'RERANumber' || fk === 'AvoidLocations' || fk === 'Preferences' || fk === 'GujaratRERA' || fk === 'ExistingBusiness' || fk === 'ExistingCrops' || fk === 'TPScheme';
+    const groupClass = isFull ? 'form-group full' : 'form-group';
+    let input;
+    if (typ === 'Select' && opts.length)
+      input = `<select id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}"><option value="">—</option>${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    else if (typ === 'MultiSelect' && opts.length)
+      input = `<select id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}" multiple size="3">${opts.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    else if (typ === 'Boolean')
+      input = `<select id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}"><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select>`;
+    else if (typ === 'Number' || typ === 'Area')
+      input = `<input id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}" type="number" placeholder="${esc(hint)}" />`;
+    else if (typ === 'Date')
+      input = `<input id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}" type="date" />`;
+    else if (typ === 'Textarea')
+      input = `<textarea id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}" rows="2" placeholder="${esc(hint)}"></textarea>`;
+    else if (typ === 'Autocomplete' && opts.length)
+      input = `<input id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}" list="need-dl-${esc(fk)}" type="text" placeholder="${esc(hint)}" autocomplete="off" />`;
+    else
+      input = `<input id="${esc(id)}" data-testid="${esc(testId)}" data-field-key="${esc(fk)}" type="text" placeholder="${esc(hint)}" />`;
+    const tierBadge = f.Tier === 'CORE' ? '<span style="color:#dc2626;font-size:10px;margin-left:4px">*</span>' : '';
+    return `<div class="${groupClass}"><label>${esc(lbl)}${tierBadge}</label>${input}${help ? `<span style="font-size:11px;color:#7a6355;margin-top:2px;display:block">${esc(help)}</span>` : ''}</div>`;
   }
 
   async function saveAddNeed() {
@@ -1441,26 +1510,32 @@
       }
       const txnId = txnRes.data.TransactionID;
 
-      // Step 2: Build requirement payload
-      const bmin = numOrNull(document.getElementById('need-budget-min').value);
-      const bmax = numOrNull(document.getElementById('need-budget-max').value);
+      // Step 2: Build requirement payload with ALL dynamic fields
       const sub  = document.getElementById('need-subcategory').value || null;
-
-      // Collect locations
-      const locInputs = document.querySelectorAll('#need-locations-list .location-row input');
-      const locs = Array.from(locInputs).map(i => i.value.trim()).filter(Boolean);
-
       const reqPayload = {
         LeadID:      LEAD_ID,
         Category:    cat,
         SubCategory: sub || null,
-        TransactionType: txnType
+        TransactionType: txnType,
+        RequirementStatus: 'Active'
       };
-      if (bmin !== null) reqPayload.BudgetMin = bmin;
-      if (bmax !== null) reqPayload.BudgetMax = bmax;
-      if (locs[0]) reqPayload.Location1 = locs[0];
-      if (locs[1]) reqPayload.Location2 = locs[1];
-      if (locs[2]) reqPayload.Location3 = locs[2];
+
+      // Collect every field with data-field-key attribute
+      document.querySelectorAll('#need-dynamic-fields [data-field-key]').forEach(el => {
+        const key = el.dataset.fieldKey;
+        let val;
+        if (el.tagName === 'SELECT' && el.multiple) {
+          val = Array.from(el.selectedOptions).map(o => o.value).filter(Boolean);
+          if (!val.length) return;
+        } else {
+          val = el.value?.trim ? el.value.trim() : el.value;
+          if (val === '' || val == null) return;
+          if (el.type === 'number') { const n = Number(val); if (isNaN(n)) return; val = n; }
+          if (val === 'true') val = true;
+          if (val === 'false') val = false;
+        }
+        reqPayload[key] = val;
+      });
 
       // Step 3: Create Requirement
       const reqRes = await fetch(`/api/transactions/${encodeURIComponent(txnId)}/requirements`, {
@@ -1479,7 +1554,7 @@
       document.getElementById('add-need-error').textContent = e.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Add Need';
+      btn.textContent = 'Add Requirement';
     }
   }
 

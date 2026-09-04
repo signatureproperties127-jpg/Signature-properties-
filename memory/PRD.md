@@ -19,7 +19,23 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 3 (Sep 4, 2026 continued)
+## What's Been Implemented — Session 4 (Sep 4, 2026 continued)
+
+### Client Workspace Dynamic Form
+- **`add-need-modal` in `client-workspace.html` now fully dynamic** — uses same `/api/v2/form-config` endpoint as the clients page Add Client modal
+- Removed hardcoded budget/location inputs — everything renders from V2FieldConfig (154 fields)
+- **Section-grouped rendering**: Budget → Location → Property → Legal → Client → Timing → Details
+- **Autocomplete datalists** for fields with Options (Surat area presets, industry types, etc.)
+- **Tier indicators**: CORE fields show red `*` asterisk
+- **Help text** rendered below field (e.g., "Rate range per sq ft (Surat market unit)", "Gujarat RERA registration number", "1 vigha = 17,424 sqft")
+- **Full data-testid coverage**: `need-txn-type`, `need-category`, `need-subcategory`, `need-req-field-<FieldKey>` for every dynamic field
+- **saveAddNeed() collects all fields dynamically** via `[data-field-key]` attribute — no hardcoded field extraction
+- Removed legacy `addLocationRow()` + `location-row` — replaced by dynamic Location1/2/3 fields
+- **End-to-end verified**: Created Commercial/Office requirement (R000199) with Cabins=4, Workstations=20, MeetingRooms=2, ConferenceRoom=Yes, FurnishingType=Fully Furnished, NatureOfBusiness=IT/Software, GujaratRERA — all fields persisted correctly to DB
+
+
+
+## What's Been Implemented — Session 3 (Sep 4, 2026 later)
 
 ### Duplicate Merge UI
 - **Fuzzy dup detection** in `googleSheetSyncService._syncOneRow()`:
