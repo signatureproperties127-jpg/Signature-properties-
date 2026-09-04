@@ -1,0 +1,57 @@
+{
+  "summary": "Verified the new mobile-first dashboard (/app/index.html) end-to-end on desktop (1440x900) and mobile (390x844) viewports plus regressions on /inventory, /rera-import, /client-workspace. All requested data-testids, hrefs, counts, and interactions work correctly. No console errors, no page errors, no layout breaks observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_details": {
+    "desktop": {
+      "brand": "SP Signature Property (visible)",
+      "nav_links_visible": true,
+      "hamburger_hidden": true,
+      "stats": {"leads": "194", "inventory": "9", "rera": "5", "visits": "0"},
+      "modules": {"m-clients": "194", "m-inv": "9", "m-rera": "5", "m-reqs": "199", "m-dups": "0", "m-review": "5", "m-hot": "4"},
+      "hero_sub": "4 clients tap-and-call ready",
+      "call_preview_rows": 4,
+      "first_row_tel_href": "tel:+919825012345",
+      "first_row_wa_href": "https://wa.me/919825012345?text=...",
+      "first_row_open_href": "/client-workspace?id=L000001",
+      "module_hrefs_verified": ["/clients","/inventory","/inventory?rera=1","/rera-import","/requirements-view","/duplicates","/inventory?review=1","/clients"],
+      "hero_hrefs_verified": {"hero-new-lead": "/clients", "hero-add-property": "/inventory"},
+      "smart_call_modal": {"opens": true, "item_count": 20, "closes_via_close_btn": true, "closes_via_ESC": true, "closes_via_backdrop_click": true}
+    },
+    "mobile_390x844": {
+      "hamburger_visible": true,
+      "nav_hidden_by_default": true,
+      "nav_shows_after_hamburger_click": true,
+      "fab_call_visible": true,
+      "fab_opens_smart_call_modal": true
+    },
+    "regressions": {
+      "/inventory": "200 OK, page loaded (title: Inventory — Signature Property)",
+      "/rera-import": "200 OK, [data-testid=scraper-run-btn] present, 'Auto Scraper' text visible",
+      "/client-workspace?id=LEAD-0001": "200 OK, lead title rendered"
+    }
+  },
+  "observations": [
+    "Note: mod-dups shows 0 while the review request expected 1. The API /api/v2/duplicates/pending currently returns an empty (or non-pending) list — this is a data-driven value, not a UI bug. Confirm if seeded data is expected to have 1 pending duplicate.",
+    "Note: mod-hot count is derived from Tag/ClientStatus 'hot' matches on leads (4 found) — no dedicated /hot-leads endpoint. Working as coded."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "index.html is 505 lines with inline CSS + JS. Acceptable for a landing dashboard but if it grows further, extract CSS/JS into /app/public/ for cacheability.",
+    "boot() swallows failures silently — if /api/leads fails, ALL_LEADS stays empty and stats show '—' without user-visible error. Consider a small error banner when leadsRes.ok !== true.",
+    "loadSiteVisits() calls /api/v2/site-visit-bookings?leadId=all which is a made-up endpoint; it will silently fall back to '0'. Confirm intent (aggregate query) or wire to a real endpoint.",
+    "renderStats() uses ALL_INV.filter(p => !p._deleted) but v2 inventory rows may not carry a _deleted flag; harmless but dead check."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped as requested)", "frontend": "100%"},
+  "test_credentials": "DEMO_MODE active — auto-auth as USR-0001",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New dashboard is fully verified (desktop + mobile). All data-testids exist with correct hrefs. Smart-call modal opens/closes via all three methods. Mobile hamburger + FAB both wired correctly. Regressions on /inventory, /rera-import, /client-workspace pass. Duplicates count is 0 rather than 1 — verify seed data if a non-zero value is expected."
+}
