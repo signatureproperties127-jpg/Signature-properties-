@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RERA Import — Signature Property</title>
+  <style>
+    :root {
+      --clr-brown-dark: #2c1405; --clr-brown: #5c3317; --clr-gold-mid: #d4a017; --clr-gold-soft: #fdf8ec;
+      --clr-bg: #faf7f2; --clr-border: #e8ddd0; --clr-text: #1c0a00; --clr-text-light: #7a6355;
+      --clr-success: #16a34a; --clr-warning: #d97706; --clr-danger: #dc2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--clr-bg); color: var(--clr-text); min-height: 100vh; }
+    .topnav { background: var(--clr-brown-dark); color: #fff; display: flex; align-items: center; padding: 0 24px; height: 52px; gap: 4px; }
+    .topnav .brand { font-weight: 800; font-size: 15px; color: var(--clr-gold-mid); margin-right: 20px; letter-spacing: .02em; }
+    .topnav a { color: #d4b896; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13.5px; }
+    .topnav a.active { background: rgba(212,160,23,.18); color: var(--clr-gold-mid); font-weight: 600; }
+    .topnav a:hover:not(.active) { background: rgba(255,255,255,.08); color: #fff; }
+    .topnav-right { margin-left: auto; }
+    .page { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .page-title { font-size: 24px; font-weight: 800; color: var(--clr-brown); }
+    .page-subtitle { font-size: 13.5px; color: var(--clr-text-light); margin-top: 4px; max-width: 640px; line-height: 1.5; }
+    .card { background: #fff; border-radius: 12px; border: 1px solid var(--clr-border); padding: 20px; margin-bottom: 20px; }
+    .card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--clr-brown); margin-bottom: 12px; }
+    .drop-zone { border: 2px dashed #fbbf24; background: var(--clr-gold-soft); border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all .15s; }
+    .drop-zone:hover, .drop-zone.hover { background: #fde68a; border-color: var(--clr-warning); }
+    .drop-zone .icon { font-size: 44px; }
+    .drop-zone h3 { font-size: 15px; color: var(--clr-brown); margin: 8px 0 4px; }
+    .drop-zone p { font-size: 12.5px; color: var(--clr-text-light); }
+    .drop-zone input { display: none; }
+    .btn { padding: 9px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s; }
+    .btn-primary { background: var(--clr-brown); color: #fff; }
+    .btn-primary:hover { background: var(--clr-brown-dark); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-ghost { background: #fff; color: var(--clr-brown); border: 1px solid var(--clr-border); }
+    .btn-accent { background: #d97706; color: #fff; }
+    .btn-accent:hover { background: #b45309; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
+    .stat { background: #fff; border: 1px solid var(--clr-border); border-radius: 10px; padding: 12px 14px; }
+    .stat-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--clr-text-light); }
+    .stat-value { font-size: 24px; font-weight: 800; margin-top: 4px; }
+    .stat.stat-new .stat-value    { color: var(--clr-success); }
+    .stat.stat-upd .stat-value    { color: #0369a1; }
+    .stat.stat-area .stat-value   { color: var(--clr-warning); }
+    .stat.stat-old .stat-value    { color: #7c3aed; }
+    .stat.stat-bad .stat-value    { color: var(--clr-danger); }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--clr-border); text-align: left; }
+    th { background: var(--clr-gold-soft); color: var(--clr-brown); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 700; }
+    .badge-ok    { background: #dcfce7; color: #166534; }
+    .badge-warn  { background: #fef3c7; color: #78350f; }
+    .badge-err   { background: #fee2e2; color: #991b1b; }
+    .badge-info  { background: #dbeafe; color: #1e3a8a; }
+    .chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { background: #fef3c7; color: #78350f; border: 1px solid #fbbf24; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+    .chip button { background: transparent; border: none; cursor: pointer; color: #b45309; font-weight: 800; font-size: 14px; padding: 0 2px; line-height: 1; }
+    .error-list { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 14px; margin-top: 10px; max-height: 200px; overflow-y: auto; }
+    .error-list-item { font-size: 12px; color: #7f1d1d; padding: 4px 0; border-bottom: 1px dashed #fca5a5; font-family: 'Courier New', monospace; }
+    .error-list-item:last-child { border-bottom: none; }
+    .row-hidden { display: none; }
+    details summary { cursor: pointer; font-weight: 700; color: var(--clr-brown); padding: 6px 0; user-select: none; }
+    details[open] summary { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+<nav class="topnav">
+  <span class="brand">Signature Property</span>
+  <a href="/">Dashboard</a>
+  <a href="/clients">Clients</a>
+  <a href="/inventory">Inventory</a>
+  <a href="/requirements-view">All Requirements</a>
+  <a href="/duplicates">Duplicates</a>
+  <a href="/rera-import" class="active">🏗️ RERA Import</a>
+  <div class="topnav-right"><a href="/login.html" style="color:#9a8070;font-size:13px;">Logout</a></div>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">🏗️ RERA Project Import</div>
+      <div class="page-subtitle">Upload the Gujarat RERA CSV/Excel export (District = Surat). Only projects matching your target areas and registered within the last <b id="hdr-window">10</b> years will be imported into Inventory as builder projects.</div>
+    </div>
+    <a href="/inventory?rera=1" style="text-decoration:none">
+      <button class="btn btn-ghost">View RERA Inventory →</button>
+    </a>
+  </div>
+
+  <!-- Target areas config -->
+  <div class="card">
+    <div class="card-title">🎯 Target Areas (rows outside these will be skipped)</div>
+    <div class="chip-list" id="areas-chips" data-testid="areas-chips"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+      <input id="new-area" type="text" placeholder="e.g. Bhatar" style="padding:8px 12px;border:1px solid var(--clr-border);border-radius:8px;font-size:13px;flex:1;min-width:200px" />
+      <button class="btn btn-ghost" onclick="addArea()" data-testid="add-area-btn">+ Add Area</button>
+      <button class="btn btn-primary" onclick="saveAreas()" data-testid="save-areas-btn">Save Areas</button>
+    </div>
+  </div>
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-title">📤 Upload CSV / Excel</div>
+    <label class="drop-zone" id="drop-zone" for="file-input" data-testid="drop-zone">
+      <div class="icon">📁</div>
+      <h3 id="dz-title">Drop CSV / Excel here or click to browse</h3>
+      <p>Supported: .csv, .xlsx, .xls · Max 10 MB</p>
+      <input id="file-input" type="file" accept=".csv,.xlsx,.xls" data-testid="file-input" />
+    </label>
+    <div id="upload-actions" style="margin-top:12px;display:none;gap:8px;flex-wrap:wrap" data-testid="upload-actions">
+      <button class="btn btn-ghost" onclick="doPreview()" data-testid="preview-btn">🔎 Preview</button>
+      <button class="btn btn-accent" onclick="doCommit(false)" data-testid="commit-btn" disabled id="commit-btn">✅ Import Now</button>
+      <button class="btn btn-primary" onclick="doCommit(true)" data-testid="commit-review-btn" disabled id="commit-review-btn">🆕 Import as "Needs Review"</button>
+      <button class="btn btn-ghost" onclick="resetUpload()">✕ Cancel</button>
+    </div>
+  </div>
+
+  <!-- Preview / Result -->
+  <div class="card" id="preview-card" style="display:none" data-testid="preview-card">
+    <div class="card-title" id="preview-title">Preview Summary</div>
+    <div class="stat-grid" id="stat-grid"></div>
+
+    <details style="margin-top:16px" open>
+      <summary>✅ Projects to import <span id="proj-count" style="font-weight:400;color:var(--clr-text-light)"></span></summary>
+      <div style="overflow-x:auto"><table id="proj-table"></table></div>
+    </details>
+
+    <details style="margin-top:12px">
+      <summary>⚠️ Skipped — Out of area <span id="oa-count" style="font-weight:400;color:var(--clr-text-light)"></span></summary>
+      <div id="oa-list" class="error-list"></div>
+    </details>
+
+    <details style="margin-top:12px">
+      <summary>⏳ Skipped — Registered over <span id="win-span">10</span> years ago <span id="old-count" style="font-weight:400;color:var(--clr-text-light)"></span></summary>
+      <div id="old-list" class="error-list"></div>
+    </details>
+
+    <details style="margin-top:12px">
+      <summary>❌ Invalid RERA number format <span id="bad-count" style="font-weight:400;color:var(--clr-text-light)"></span></summary>
+      <div id="bad-list" class="error-list"></div>
+    </details>
+
+    <details style="margin-top:12px">
+      <summary>❓ Other row errors <span id="other-count" style="font-weight:400;color:var(--clr-text-light)"></span></summary>
+      <div id="other-list" class="error-list"></div>
+    </details>
+  </div>
+
+  <!-- History -->
+  <div class="card">
+    <div class="card-title">🕐 Recent Imports</div>
+    <div style="overflow-x:auto"><table id="history-table"></table></div>
+  </div>
+</div>
+
+<script>
+  let selectedFile = null;
+  let lastPreview  = null;
+  let areasConfig  = [];
+
+  window.addEventListener('DOMContentLoaded', () => {
+    setupDrop();
+    loadConfig();
+    loadHistory();
+  });
+
+  // ── Areas config ─────────────────────────────────────────────────────────
+  async function loadConfig() {
+    try {
+      const res = await fetch('/api/v2/rera/config').then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      areasConfig = res.data.areas.slice();
+      document.getElementById('hdr-window').textContent = res.data.windowYears;
+      document.getElementById('win-span').textContent = res.data.windowYears;
+      renderAreas();
+    } catch (e) { alert('Config load failed: ' + e.message); }
+  }
+
+  function renderAreas() {
+    document.getElementById('areas-chips').innerHTML = areasConfig.map((a, i) =>
+      `<span class="chip" data-testid="area-chip-${i}">${escapeHtml(a)} <button onclick="removeArea(${i})" title="Remove">×</button></span>`
+    ).join('') || '<em style="color:var(--clr-text-light);font-size:12.5px">No areas configured — imports will skip every row.</em>';
+  }
+
+  function addArea() {
+    const input = document.getElementById('new-area');
+    const v = input.value.trim();
+    if (!v) return;
+    if (areasConfig.some(a => a.toLowerCase() === v.toLowerCase())) { alert('Already added'); return; }
+    areasConfig.push(v);
+    input.value = '';
+    renderAreas();
+  }
+
+  function removeArea(i) {
+    areasConfig.splice(i, 1);
+    renderAreas();
+  }
+
+  async function saveAreas() {
+    try {
+      const res = await fetch('/api/v2/rera/config', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ areas: areasConfig })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      alert('Areas saved ✓');
+    } catch (e) { alert('Save failed: ' + e.message); }
+  }
+
+  // ── File drop ────────────────────────────────────────────────────────────
+  function setupDrop() {
+    const dz = document.getElementById('drop-zone');
+    const fi = document.getElementById('file-input');
+    ['dragenter', 'dragover'].forEach(evt =>
+      dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.add('hover'); }));
+    ['dragleave', 'drop'].forEach(evt =>
+      dz.addEventListener(evt, e => { e.preventDefault(); dz.classList.remove('hover'); }));
+    dz.addEventListener('drop', e => { if (e.dataTransfer.files.length) onFilePicked(e.dataTransfer.files[0]); });
+    fi.addEventListener('change', e => { if (e.target.files.length) onFilePicked(e.target.files[0]); });
+  }
+
+  function onFilePicked(f) {
+    if (f.size > 10 * 1024 * 1024) { alert('File too large (max 10 MB)'); return; }
+    selectedFile = f;
+    document.getElementById('dz-title').textContent = `📄 ${f.name} — ${Math.round(f.size / 1024)} KB`;
+    document.getElementById('upload-actions').style.display = 'flex';
+    document.getElementById('commit-btn').disabled = true;
+    document.getElementById('commit-review-btn').disabled = true;
+    document.getElementById('preview-card').style.display = 'none';
+    lastPreview = null;
+  }
+
+  function resetUpload() {
+    selectedFile = null;
+    lastPreview = null;
+    document.getElementById('file-input').value = '';
+    document.getElementById('dz-title').textContent = 'Drop CSV / Excel here or click to browse';
+    document.getElementById('upload-actions').style.display = 'none';
+    document.getElementById('preview-card').style.display = 'none';
+  }
+
+  async function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).replace(/^data:[^;]+;base64,/, ''));
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // ── Preview ──────────────────────────────────────────────────────────────
+  async function doPreview() {
+    if (!selectedFile) return;
+    const btn = document.querySelector('[data-testid="preview-btn"]');
+    btn.disabled = true; btn.textContent = '⏳ Parsing...';
+    try {
+      const fileBase64 = await fileToBase64(selectedFile);
+      const res = await fetch('/api/v2/rera/import/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: selectedFile.name, fileBase64 })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      lastPreview = res.data;
+      renderPreview(res.data, false);
+      document.getElementById('commit-btn').disabled = res.data.summary.projects === 0;
+      document.getElementById('commit-review-btn').disabled = res.data.summary.projects === 0;
+    } catch (e) {
+      alert('Preview failed: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = '🔎 Preview';
+    }
+  }
+
+  // ── Commit ───────────────────────────────────────────────────────────────
+  async function doCommit(needsReview) {
+    if (!selectedFile) return;
+    if (!confirm(`Import ${lastPreview?.summary?.projects || '?'} projects to Inventory${needsReview ? ' (as Needs Review)' : ''}?`)) return;
+    const btnId = needsReview ? 'commit-review-btn' : 'commit-btn';
+    const btn = document.getElementById(btnId);
+    btn.disabled = true; btn.textContent = '⏳ Importing...';
+    try {
+      const fileBase64 = await fileToBase64(selectedFile);
+      const res = await fetch('/api/v2/rera/import/commit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: selectedFile.name, fileBase64, needsReview })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      renderCommitResult(res.data);
+      await loadHistory();
+    } catch (e) {
+      alert('Import failed: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = needsReview ? '🆕 Import as "Needs Review"' : '✅ Import Now';
+    }
+  }
+
+  // ── Rendering ────────────────────────────────────────────────────────────
+  function renderPreview(d, isCommitted) {
+    document.getElementById('preview-card').style.display = 'block';
+    document.getElementById('preview-title').textContent = isCommitted ? '✅ Import Complete' : 'Preview Summary';
+
+    const stats = isCommitted
+      ? [
+          { label: 'Inserted', value: d.Inserted, cls: 'stat-new', testid: 'stat-inserted' },
+          { label: 'Updated', value: d.Updated, cls: 'stat-upd', testid: 'stat-updated' },
+          { label: 'Out of area', value: d.SkippedOutOfArea, cls: 'stat-area', testid: 'stat-skip-area' },
+          { label: 'Too old', value: d.SkippedTooOld, cls: 'stat-old', testid: 'stat-skip-old' },
+          { label: 'Invalid RERA', value: d.InvalidRera, cls: 'stat-bad', testid: 'stat-invalid' },
+          { label: 'Other errors', value: d.Other, cls: 'stat-bad', testid: 'stat-other' }
+        ]
+      : [
+          { label: 'Projects', value: d.summary.projects, cls: 'stat-new', testid: 'stat-projects' },
+          { label: 'Out of area', value: d.summary.outOfArea, cls: 'stat-area', testid: 'stat-out-of-area' },
+          { label: 'Too old', value: d.summary.tooOld, cls: 'stat-old', testid: 'stat-too-old' },
+          { label: 'Invalid RERA', value: d.summary.invalidRera, cls: 'stat-bad', testid: 'stat-invalid-rera' },
+          { label: 'Other', value: d.summary.other, cls: 'stat-bad', testid: 'stat-other-errors' }
+        ];
+    document.getElementById('stat-grid').innerHTML = stats.map(s =>
+      `<div class="stat ${s.cls}" data-testid="${s.testid}"><div class="stat-label">${s.label}</div><div class="stat-value">${s.value}</div></div>`
+    ).join('');
+
+    // Projects table (only in preview mode)
+    if (!isCommitted && d.samples?.projects) {
+      const rows = d.samples.projects;
+      document.getElementById('proj-count').textContent = `(${rows.length} shown${d.summary.projects > rows.length ? ' of ' + d.summary.projects : ''})`;
+      document.getElementById('proj-table').innerHTML = `
+        <thead><tr><th>RERA #</th><th>Project</th><th>Builder</th><th>Area</th><th>Status</th><th>Config</th><th>Units</th><th>Carpet</th><th>Reg Date</th></tr></thead>
+        <tbody>${rows.map(p => `<tr>
+          <td style="font-family:'Courier New',monospace;font-size:11px">${escapeHtml(p.RERANumber)}</td>
+          <td><b>${escapeHtml(p.ProjectName || '—')}</b></td>
+          <td>${escapeHtml(p.BuilderName || '—')}</td>
+          <td><span class="badge badge-info">${escapeHtml(p.Location1 || '—')}</span></td>
+          <td><span class="badge ${p.ProjectStatus === 'Completed' ? 'badge-ok' : p.ProjectStatus === 'Lapsed' ? 'badge-err' : 'badge-warn'}">${escapeHtml(p.ProjectStatus || '—')}</span></td>
+          <td>${(p.Configurations || []).join(' / ') || '—'}</td>
+          <td>${p.TotalUnits || '—'}</td>
+          <td>${p.AreaRange ? `${p.AreaRange.min || '?'}-${p.AreaRange.max || '?'}` : '—'}</td>
+          <td>${p.RERARegistrationDate || '—'}</td>
+        </tr>`).join('')}</tbody>`;
+    } else {
+      document.getElementById('proj-table').innerHTML = '';
+      document.getElementById('proj-count').textContent = '';
+    }
+
+    const samples = isCommitted ? d.errorSamples : d.samples;
+    fillErrorList('oa-list', 'oa-count', samples.outOfArea || [], (x) => `${x.RERANumber} — Village: ${x.Village || '—'} | Location: ${x.Location || '—'}`);
+    fillErrorList('old-list', 'old-count', samples.tooOld || [], (x) => `${x.RERANumber} — Registered: ${x.RegistrationDate}`);
+    fillErrorList('bad-list', 'bad-count', samples.invalidRera || [], (x) => `${x.RERANumber} — ${x.reason}`);
+    fillErrorList('other-list', 'other-count', samples.other || [], (x) => x.reason);
+  }
+
+  function fillErrorList(listId, countId, rows, formatter) {
+    document.getElementById(countId).textContent = rows.length ? `(${rows.length} shown)` : '(0)';
+    document.getElementById(listId).innerHTML = rows.length
+      ? rows.map(r => `<div class="error-list-item">${escapeHtml(formatter(r))}</div>`).join('')
+      : '<em style="color:var(--clr-text-light);font-size:12px">None</em>';
+  }
+
+  function renderCommitResult(d) {
+    // Reuse the preview panel to show commit outcome
+    renderPreview(d, true);
+    // Disable commit buttons after successful import
+    document.getElementById('commit-btn').disabled = true;
+    document.getElementById('commit-review-btn').disabled = true;
+    document.getElementById('preview-title').textContent = '✅ Import Complete';
+    window.scrollTo({ top: document.getElementById('preview-card').offsetTop - 20, behavior: 'smooth' });
+  }
+
+  // ── History ──────────────────────────────────────────────────────────────
+  async function loadHistory() {
+    try {
+      const res = await fetch('/api/v2/rera/import/history?limit=20').then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      const rows = res.data || [];
+      const tbl = document.getElementById('history-table');
+      if (!rows.length) {
+        tbl.innerHTML = '<tbody><tr><td style="text-align:center;color:var(--clr-text-light);padding:20px">No imports yet.</td></tr></tbody>';
+        return;
+      }
+      tbl.innerHTML = `
+        <thead><tr><th>Import ID</th><th>Filename</th><th>Run At</th><th>Source</th><th>Inserted</th><th>Updated</th><th>Skip · Area</th><th>Skip · Old</th><th>Invalid</th></tr></thead>
+        <tbody data-testid="history-tbody">${rows.map(h => `<tr>
+          <td style="font-family:'Courier New',monospace;font-size:11px">${escapeHtml(h.ImportID)}</td>
+          <td>${escapeHtml(h.Filename || '—')}</td>
+          <td>${escapeHtml((h.RunAt || '').replace('T', ' ').slice(0, 16))}</td>
+          <td><span class="badge badge-info">${escapeHtml(h.Source || '—')}</span></td>
+          <td><b style="color:var(--clr-success)">${h.Inserted}</b></td>
+          <td><b style="color:#0369a1">${h.Updated}</b></td>
+          <td>${h.SkippedOutOfArea}</td>
+          <td>${h.SkippedTooOld}</td>
+          <td>${h.InvalidRera}</td>
+        </tr>`).join('')}</tbody>`;
+    } catch (e) {
+      document.getElementById('history-table').innerHTML = `<tbody><tr><td style="color:var(--clr-danger)">Load failed: ${escapeHtml(e.message)}</td></tr></tbody>`;
+    }
+  }
+
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+</script>
+</body>
+</html>

@@ -252,6 +252,76 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    // ── RERA Import V2 (Gujarat RERA CSV/Excel → Inventory) ─────────────────
+    // POST   /api/v2/rera/import/preview  { filename, fileBase64, columnMap? }
+    // POST   /api/v2/rera/import/commit   { filename, fileBase64, columnMap?, needsReview? }
+    // GET    /api/v2/rera/import/history?limit=20
+    // GET    /api/v2/rera/config
+    // PATCH  /api/v2/rera/config          { areas: [...] }
+    if (/^\/api\/v2\/rera\/(import\/(preview|commit|history)|config)\/?$/i.test(pathname)) {
+      const { ReraImportService } = require('./src/services/reraImportService');
+      const { loadConfig, saveAreas } = require('./src/services/reraConfig');
+      const svc = new ReraImportService(runtime.repository);
+
+      // Config endpoints
+      if (/^\/api\/v2\/rera\/config\/?$/i.test(pathname)) {
+        if (req.method === 'GET') {
+          const cfg = loadConfig(runtime.repository);
+          sendJson(res, { ok: true, data: { areas: cfg.areas, windowYears: cfg.windowYears, regex: cfg.regex.source } });
+          return;
+        }
+        if (req.method === 'PATCH') {
+          try {
+            const body = bodyForV2 || {};
+            const areas = saveAreas(runtime.repository, body.areas);
+            sendJson(res, { ok: true, data: { areas } });
+          } catch (e) {
+            sendJson(res, { ok: false, error: e.message }, 400);
+          }
+          return;
+        }
+        sendJson(res, { ok: false, error: 'Method not supported' }, 405);
+        return;
+      }
+
+      // History
+      if (/^\/api\/v2\/rera\/import\/history\/?$/i.test(pathname)) {
+        if (req.method !== 'GET') { sendJson(res, { ok: false, error: 'Method not supported' }, 405); return; }
+        const limit = Number(url.searchParams.get('limit')) || 20;
+        sendJson(res, svc.listHistory(limit));
+        return;
+      }
+
+      // Preview / Commit  — expect JSON body: { filename, fileBase64, columnMap? }
+      if (req.method !== 'POST') { sendJson(res, { ok: false, error: 'Method not supported' }, 405); return; }
+      const body = bodyForV2 || {};
+      if (!body.fileBase64) { sendJson(res, { ok: false, error: 'fileBase64 required' }, 400); return; }
+      let buffer;
+      try {
+        const cleaned = String(body.fileBase64).replace(/^data:[^;]+;base64,/, '');
+        buffer = Buffer.from(cleaned, 'base64');
+      } catch (e) {
+        sendJson(res, { ok: false, error: 'Bad base64 payload' }, 400);
+        return;
+      }
+      const filename = body.filename || 'upload.csv';
+      const columnMap = body.columnMap || null;
+
+      if (/preview\/?$/i.test(pathname)) {
+        const out = svc.preview(buffer, filename, columnMap);
+        sendJson(res, out, out.ok ? 200 : 400);
+        return;
+      }
+      // Commit
+      const out = svc.commit(buffer, filename, columnMap, {
+        needsReview: !!body.needsReview,
+        userId: (getAuthenticatedActor(req, url)?.userId) || 'system',
+        importedFrom: body.importedFrom || 'GujRERA-CSV'
+      });
+      sendJson(res, out, out.ok ? 200 : 400);
+      return;
+    }
+
     // ── Site Visit Bookings V2 (group N properties into one visit slot) ─────
     // POST   /api/v2/site-visit-bookings                { requirementId, propertyIds[], visitDate, visitTime, ... }
     // GET    /api/v2/site-visit-bookings?requirementId=X | ?leadId=X
@@ -2275,7 +2345,8 @@ appServer = http.createServer(async (req, res) => {
     '/requirements-view':   '/requirements-view.html',
     '/duplicates':          '/duplicates.html',
     '/inventory':           '/inventory.html',
-    '/property-workspace':  '/property-workspace.html'
+    '/property-workspace':  '/property-workspace.html',
+    '/rera-import':         '/rera-import.html'
   };
 
   let filePath = url.pathname === '/' ? '/index.html'

@@ -19,7 +19,41 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 9 (Sep 4, 2026)
+## What's Been Implemented — Session 10 (Sep 4, 2026)
+
+### RERA Import Module — Phase 1 (Gujarat RERA CSV/Excel → Inventory)
+- **New service `src/services/reraConfig.js`** — target areas (default: Vesu, Adajan, Pal, Piplod, Athwa, Citylight) stored in `_ReraConfig` collection (runtime editable), RERA regex (`/^PR\/GJ\/SURAT\/[^/]+\/[^/]+\/[A-Z]{2,4}\d{4,7}\/\d{6}$/i`), status normalization map (hardcoded — Ongoing/New/Completed/Lapsed), area fuzzy match (`normalizeArea()` strips spaces/hyphens/underscores so "City Light"="Citylight"="city-light").
+- **New service `src/services/reraImportService.js`** — CSV + XLSX parser with column alias auto-detection (RERA Number, Project Name, Promoter, Village, Taluka, Registration Date, Unit Type, No of Units, Carpet Area, Land Area, Possession Date, etc.), aggregation by RERANumber (multi-row unit types collapse into `Configurations[]` + `TotalUnits` + `AreaRange={min,max}`), 10-year rolling filter on `RERARegistrationDate` (inclusive), area filter matches Village OR Location1 only (per Q3 lock), safe-update fields on dedup (never overwrites AskingPrice / Photos / Notes / BrokerName).
+- **API endpoints**:
+  - `GET  /api/v2/rera/config` / `PATCH /api/v2/rera/config` — read + save areas
+  - `POST /api/v2/rera/import/preview` — `{ filename, fileBase64, columnMap? }` → returns totalRows, detectedColumns, columnMap, missingRequired, summary { projects, outOfArea, tooOld, invalidRera, other }, and samples[]
+  - `POST /api/v2/rera/import/commit` — `{ filename, fileBase64, columnMap?, needsReview? }` → inserts/updates Inventory rows, writes `_ReraImports` history entry with counts + insertedIDs + updatedIDs
+  - `GET  /api/v2/rera/import/history?limit=20` — recent imports (capped at 100 stored)
+- **Inventory row shape (Phase 1 additions)**: `IsReraMaster=true`, `NeedsReview` (opt), `RERANumber`, `RERARegistrationDate`, `ProjectName`, `BuilderName`, `ProjectStatus`, `Location1`, `Taluka`, `Village`, `Configurations[]`, `TotalUnits`, `AreaRange`, `PossessionDate`, `LandArea`, `ImportedFrom`, `ImportedAt`. `AskingPrice=null`, `Photos=[]` (broker fills later).
+
+### Admin UI — `/rera-import.html`
+- Drag-drop CSV/Excel upload (max 10 MB, base64 → JSON body — no multipart parser needed)
+- Editable **Target Areas** chip list with add/remove + Save
+- **Preview** button → live stats grid (Projects / Out-of-area / Too-old / Invalid RERA / Other) + full projects table (RERA#, Project, Builder, Area, Status, Config, Units, Carpet, RegDate) + collapsible error sections
+- **Import Now** button (green) and **Import as "Needs Review"** button (brown/gold — flags every row with `NeedsReview=true`)
+- **Recent Imports** history table (Import ID, Filename, Run At, Inserted/Updated counts, Skipped-Area, Skipped-Old, Invalid)
+- Nav link "🏗️ RERA Import" added on inventory + rera-import pages
+
+### Inventory page updates
+- New filter chips: **🏗️ RERA Master** (yellow) + **🆕 Pending Review** (blue)
+- Default view **hides** all `IsReraMaster=true` rows (9 of 13 shown before filter; toggle chip → 4 of 13)
+- RERA cards get a distinct **🏗️ RERA badge** (top-left, yellow) + subtitle line showing `RERA: PR/GJ/SURAT/…` in monospace
+- Card title auto-formats as `ProjectName — BuilderName`
+- Fact pills show `Configurations · TotalUnits · AreaRange · Possession · ProjectStatus`
+
+### End-to-end verification
+- Sample CSV with 8 rows tested → 4 projects imported (Ratnakar Nine Square auto-aggregated `Configurations=[2BHK,3BHK]`, `TotalUnits=130`, `AreaRange=650-950`), 1 out-of-area (Bhatar), 1 too-old (2014), 1 invalid RERA format, 1 duplicate row correctly merged
+- Re-import same CSV → Inserted:0 Updated:4 (dedup by RERANumber working, safe-update-only fields respected)
+- UI screenshots confirm: preview mode shows all 4 projects + skipped buckets; inventory default view hides RERA rows; RERA chip switches to 4 RERA-only cards with correct badge/config pills
+
+
+
+
 
 ### Site Visit Booking V2 (multi-property visit slot per client)
 - **New service**: `src/services/siteVisitBookingService.js` — group N shortlisted properties into a single visit slot for one client. Persists to the existing `SiteVisits` collection with a shared `VisitBookingID` linking all rows. Bypasses the strict legacy `createSiteVisit` (which requires a Match record) so it works with SmartMatch V2 + Shortlist V2.

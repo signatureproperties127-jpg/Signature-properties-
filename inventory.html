@@ -112,6 +112,7 @@
   <a href="/inventory" class="active">Inventory</a>
   <a href="/requirements-view">All Requirements</a>
   <a href="/duplicates">Duplicates</a>
+  <a href="/rera-import">🏗️ RERA Import</a>
   <div class="topnav-right"><a href="/login.html" style="color:#9a8070;font-size:13px;">Logout</a></div>
 </nav>
 
@@ -141,6 +142,9 @@
   <div class="chip source-chip src-own" data-source="Own" data-testid="src-own" onclick="setFilter(this, 'source', 'Own')">⭐ My Own Inventory</div>
   <div class="chip source-chip src-builder" data-source="Builder" data-testid="src-builder" onclick="setFilter(this, 'source', 'Builder')">🏗️ Builder Inventory</div>
   <div class="chip source-chip src-broker" data-source="Broker" data-testid="src-broker" onclick="setFilter(this, 'source', 'Broker')">🤝 Broker Inventory</div>
+  <span style="width:1px;height:20px;background:var(--clr-border);margin:0 6px"></span>
+  <div class="chip" data-rera="" data-testid="filter-rera-off" onclick="setFilter(this, 'rera', '')" style="background:#fef3c7;color:#78350f;border:1px solid #fbbf24">🏗️ RERA Master</div>
+  <div class="chip" data-review="1" data-testid="filter-review" onclick="setFilter(this, 'review', '1')" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">🆕 Pending Review</div>
 </div>
 
 <div id="grid" class="grid"></div>
@@ -276,6 +280,8 @@
   let currentFilter = '';
   let currentSource = '';
   let currentSearch = '';
+  let currentRera   = '';   // '' = hide RERA (default), '1' = show ONLY RERA
+  let currentReview = '';   // '' = all, '1' = show ONLY NeedsReview=true
   let editingId    = null;
   let pendingPhotos = [];  // dataUrl[] to upload after save
   let existingPhotos = []; // photos already on server
@@ -310,6 +316,10 @@
 
   function render() {
     let items = allProperties;
+    // RERA filter: default HIDES rera master rows. Toggle chip to show only rera.
+    if (currentRera === '1') items = items.filter(p => p.IsReraMaster === true);
+    else items = items.filter(p => !p.IsReraMaster);
+    if (currentReview === '1') items = items.filter(p => p.NeedsReview === true);
     if (currentFilter) items = items.filter(p => p.Category === currentFilter);
     if (currentSource) items = items.filter(p => deriveSource(p) === currentSource);
     if (currentSearch) {
@@ -358,16 +368,34 @@
     let footerLeft = p.OwnerName || '—';
     if (src === 'Builder' && p.BuilderName)  footerLeft = p.BuilderName + (p.ProjectName ? ' • ' + p.ProjectName : '');
     if (src === 'Broker' && p.BrokerName)    footerLeft = p.BrokerName + (p.BrokerCommissionShare ? ' • Split ' + p.BrokerCommissionShare + '%' : '');
+    // RERA master row extras
+    const isRera = p.IsReraMaster === true;
+    if (isRera) {
+      footerLeft = (p.BuilderName || '—') + (p.ProjectName ? ' • ' + p.ProjectName : '');
+      if (Array.isArray(p.Configurations) && p.Configurations.length) facts.push(p.Configurations.join(' / '));
+      if (p.TotalUnits) facts.push(p.TotalUnits + ' units');
+      if (p.AreaRange && (p.AreaRange.min || p.AreaRange.max)) facts.push(`${p.AreaRange.min || '?'}–${p.AreaRange.max || '?'} sqft`);
+      if (p.PossessionDate) facts.push('🗝 ' + String(p.PossessionDate).slice(0, 7));
+      if (p.ProjectStatus) facts.push(p.ProjectStatus);
+    }
+    const reraBadge = isRera
+      ? `<span class="badge-status" style="position:absolute;top:8px;left:8px;background:#fef3c7;color:#78350f;border:1px solid #fbbf24">🏗️ RERA</span>`
+      : '';
+    const reviewBadge = p.NeedsReview === true
+      ? `<span class="badge-status" style="position:absolute;bottom:8px;left:8px;background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc">🆕 Review</span>`
+      : '';
     return `<div class="card" data-testid="prop-card-${esc(p.PropertyID)}" onclick="openEditModal('${esc(p.PropertyID)}')">
       <div class="card-photo">
         ${firstPhoto ? `<img src="${esc(firstPhoto)}" alt="" onerror="this.style.display='none';this.parentElement.innerHTML+='<div class=&quot;no-photo&quot;>NO PHOTO</div>'" />` : '<div class="no-photo">📷 NO PHOTO</div>'}
         <span class="badge-status ${statusClass}">${esc(p.ListingStatus || 'Available')}</span>
         <span class="badge-source src-${esc(src)}" data-testid="src-badge-${esc(p.PropertyID)}">${SOURCE_LABEL[src] || src}</span>
+        ${reraBadge}
+        ${reviewBadge}
         ${photos.length > 1 ? `<span class="card-photo-count">📷 ${photos.length}</span>` : ''}
       </div>
       <div class="card-body">
         <div class="card-title">${esc(p.Title || 'Untitled')}</div>
-        <div class="card-meta">${esc(p.SubCategory || p.Category || '—')} • ${esc(p.Location1 || '—')}${p.SocietyName ? ' • ' + esc(p.SocietyName) : ''}</div>
+        <div class="card-meta">${esc(p.SubCategory || p.Category || '—')} • ${esc(p.Location1 || '—')}${p.SocietyName ? ' • ' + esc(p.SocietyName) : ''}${isRera && p.RERANumber ? '<br><span style="font-size:10.5px;color:#92400e;font-weight:600">RERA: ' + esc(p.RERANumber) + '</span>' : ''}</div>
         <div class="card-price">${fmtPrice(price, p.ListingFor)}${rate ? `<small>@ ₹${Number(rate).toLocaleString('en-IN')}/sqft</small>` : ''}</div>
         <div class="card-facts">${facts.map(f => `<span class="card-fact">${esc(f)}</span>`).join('')}</div>
       </div>
@@ -397,9 +425,17 @@
       el.classList.add('active');
       currentFilter = val;
     } else if (kind === 'source') {
-      el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      // Only source chips in same toolbar
+      el.parentElement.querySelectorAll('.source-chip').forEach(c => c.classList.remove('active'));
       el.classList.add('active');
       currentSource = val;
+    } else if (kind === 'rera') {
+      // Toggle the RERA chip on/off
+      currentRera = (currentRera === '1') ? '' : '1';
+      el.classList.toggle('active', currentRera === '1');
+    } else if (kind === 'review') {
+      currentReview = (currentReview === '1') ? '' : '1';
+      el.classList.toggle('active', currentReview === '1');
     }
     render();
   }
