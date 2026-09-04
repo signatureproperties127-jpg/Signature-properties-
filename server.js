@@ -190,6 +190,79 @@ async function handleApi(req, res, url) {
       try { bodyForV2 = await readJsonOnce(req); } catch(_) { bodyForV2 = {}; }
     }
 
+    // ── Inventory / Property APIs ────────────────────────────────────────────
+    const invMatch = pathname.match(/^\/api\/v2\/inventory(?:\/([^\/]+))?(?:\/(photos|photos\/[^\/]+))?\/?$/i);
+    if (invMatch) {
+      const { InventoryService } = require('./src/services/inventoryService');
+      const svc = new InventoryService(runtime.repository);
+      const [, propertyId, subRoute] = invMatch;
+
+      // GET /api/v2/inventory
+      if (!propertyId && !subRoute && req.method === 'GET') {
+        const items = svc.list({
+          q:               url.searchParams.get('q') || undefined,
+          category:        url.searchParams.get('category') || undefined,
+          subCategory:     url.searchParams.get('subCategory') || undefined,
+          transactionType: url.searchParams.get('transactionType') || undefined,
+          status:          url.searchParams.get('status') || undefined
+        });
+        sendJson(res, { ok: true, data: items, count: items.length });
+        return;
+      }
+
+      // POST /api/v2/inventory (create)
+      if (!propertyId && req.method === 'POST') {
+        const body = bodyForV2 || {};
+        const created = svc.create(body, { userId: 'USR-0001' });
+        sendJson(res, { ok: true, data: created }, 201);
+        return;
+      }
+
+      // GET /api/v2/inventory/:id
+      if (propertyId && !subRoute && req.method === 'GET') {
+        const p = svc.get(propertyId);
+        if (!p) { sendJson(res, { ok: false, error: 'Property not found' }, 404); return; }
+        sendJson(res, { ok: true, data: p });
+        return;
+      }
+
+      // PATCH /api/v2/inventory/:id
+      if (propertyId && !subRoute && req.method === 'PATCH') {
+        const updated = svc.update(propertyId, bodyForV2 || {}, { userId: 'USR-0001' });
+        if (!updated) { sendJson(res, { ok: false, error: 'Property not found' }, 404); return; }
+        sendJson(res, { ok: true, data: updated });
+        return;
+      }
+
+      // DELETE /api/v2/inventory/:id
+      if (propertyId && !subRoute && req.method === 'DELETE') {
+        const ok = svc.remove(propertyId);
+        if (!ok) { sendJson(res, { ok: false, error: 'Property not found' }, 404); return; }
+        sendJson(res, { ok: true, action: 'DELETED', propertyId });
+        return;
+      }
+
+      // POST /api/v2/inventory/:id/photos — body: { photos: [dataUrl, ...] }
+      if (propertyId && subRoute === 'photos' && req.method === 'POST') {
+        const body = bodyForV2 || {};
+        const photosArr = Array.isArray(body.photos) ? body.photos : [];
+        const photos = svc.uploadPhotos(propertyId, photosArr, { userId: 'USR-0001' });
+        if (!photos) { sendJson(res, { ok: false, error: 'Property not found' }, 404); return; }
+        sendJson(res, { ok: true, data: photos });
+        return;
+      }
+
+      // DELETE /api/v2/inventory/:id/photos/:photoId
+      const delPhotoMatch = pathname.match(/^\/api\/v2\/inventory\/([^\/]+)\/photos\/([^\/]+)\/?$/i);
+      if (delPhotoMatch && req.method === 'DELETE') {
+        const [, pid, phid] = delPhotoMatch;
+        const ok = svc.deletePhoto(pid, phid);
+        if (!ok) { sendJson(res, { ok: false, error: 'Photo or property not found' }, 404); return; }
+        sendJson(res, { ok: true, action: 'DELETED', propertyId: pid, photoId: phid });
+        return;
+      }
+    }
+
     // ── Duplicate Review APIs ────────────────────────────────────────────────
     // GET /api/v2/duplicates/pending — list all leads flagged as pending review
     if (/^\/api\/v2\/duplicates\/pending\/?$/i.test(pathname) && req.method === 'GET') {
@@ -2077,7 +2150,9 @@ appServer = http.createServer(async (req, res) => {
     '/clients':             '/clients.html',
     '/client-workspace':    '/client-workspace.html',
     '/requirements-view':   '/requirements-view.html',
-    '/duplicates':          '/duplicates.html'
+    '/duplicates':          '/duplicates.html',
+    '/inventory':           '/inventory.html',
+    '/property-workspace':  '/property-workspace.html'
   };
 
   let filePath = url.pathname === '/' ? '/index.html'

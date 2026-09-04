@@ -19,9 +19,43 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 4 (Sep 4, 2026 continued)
+## What's Been Implemented — Session 5 (Sep 4, 2026 late)
 
-### Client Workspace Dynamic Form
+### Inventory / Property Master Module
+- **New service**: `src/services/inventoryService.js` — CRUD + photo upload
+- **API endpoints**:
+  - `GET  /api/v2/inventory` — list with filters (q, category, subCategory, transactionType, status)
+  - `POST /api/v2/inventory` — create property
+  - `GET  /api/v2/inventory/:id` — detail
+  - `PATCH /api/v2/inventory/:id` — update
+  - `DELETE /api/v2/inventory/:id` — soft delete
+  - `POST /api/v2/inventory/:id/photos` — multi-photo upload (base64 data URLs)
+  - `DELETE /api/v2/inventory/:id/photos/:photoId` — delete individual photo
+- **Photo storage**: Base64 payload → decoded to `/app/uploads/properties/<id>/<timestamp>.<ext>` on disk → served under `/uploads/properties/<id>/…`
+- **`/inventory.html` grid page**:
+  - Photo-card layout with status badge, photo count badge, owner info footer
+  - Filter chips per category (🏠 Res / 🏢 Comm / 🏭 Ind / 🌾 Land)
+  - Live search across title/owner/society/area
+  - Indian-formatted prices (₹1.25 Cr, ₹75L, ₹22,000/mo, ₹95,000/mo)
+  - Rate/sqft, carpet area, BHK, furnishing, cabins, frontage, GIDC, ★ Exclusive facts pills
+- **Add / Edit Property modal**:
+  - Static blocks: Photos, Property Info, Ownership
+  - Dynamic Pricing + Commission + Property + Legal + Project sections from V2FieldConfig
+  - Multi-photo drag/click upload with base64 preview strip + individual delete
+  - Full data-testid coverage
+- **24 new Property-scoped V2FieldConfig fields** (EntityScope='Property'):
+  - Listing: Title, ListingFor, ListingStatus, AvailableFrom, PropertyURL, ExclusiveWithMe
+  - Ownership: OwnerName, OwnerMobile, OwnerType, OwnerEmail, POA
+  - Pricing: AskingPrice, AskingRatePerSqFt, MinPrice, MaintenanceMonthly, DepositMonths, NegotiableMargin
+  - Commission: CommissionMode (11 options incl. 1%/2% splits, Rent=1mo, Fixed), CommissionAmount
+  - Project: ProjectName, BuilderName, BuilderRERA, ProjectPossession, ProjectStatus
+- **8 sample Surat properties seeded** across all categories: Ratnakar Nine Square Vesu, City Light rent, Dumas Road villa, Ghod Dod office (4 cabins/20 seats), Vesu shop, GIDC Sachin textile godown, Kamrej NA plot 12 vigha, GIDC Pandesara factory
+- **Nav updated**: Inventory link added to Clients + Duplicates pages
+- **Verified end-to-end**: Created PROP-0009 via UI (₹75L @ ₹7,200/sqft + Exclusive), uploaded 3 photos via API, photos serve correctly via `/uploads/…`, card shows 📷 3 badge
+
+
+
+## What's Been Implemented — Session 4 (Sep 4, 2026 later)
 - **`add-need-modal` in `client-workspace.html` now fully dynamic** — uses same `/api/v2/form-config` endpoint as the clients page Add Client modal
 - Removed hardcoded budget/location inputs — everything renders from V2FieldConfig (154 fields)
 - **Section-grouped rendering**: Budget → Location → Property → Legal → Client → Timing → Details
