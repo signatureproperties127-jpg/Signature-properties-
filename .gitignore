@@ -3,3 +3,10 @@ package-lock.json
 
 # Production database lives outside the repo on the VM; never track live data.
 data/sig-realty-db.json
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
