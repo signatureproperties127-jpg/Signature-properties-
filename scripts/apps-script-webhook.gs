@@ -19,7 +19,7 @@
  */
 
 // ── CONFIG (update these two) ─────────────────────────────────────────
-const WEBHOOK_URL = 'https://e6961d98-7d3f-45b6-bd35-6e53a7314088.preview.emergentagent.com/api/sync/google-sheet';
+const WEBHOOK_URL = 'https://signature-properties.onrender.com/api/sync/google-sheet';
 const SYNC_TOKEN  = 'CHANGE_ME_SECRET'; // must match SHEET_SYNC_TOKEN env on CRM
 
 // ── Sheet tabs to watch ───────────────────────────────────────────────
