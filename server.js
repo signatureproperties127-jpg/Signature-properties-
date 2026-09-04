@@ -252,6 +252,17 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    // ── Storage health (Mongo migration observability) ──────────────────────
+    if (pathname === '/api/v2/storage/health' && req.method === 'GET') {
+      try {
+        const mongoStore = require('./src/data/mongoStore');
+        sendJson(res, { ok: true, data: mongoStore.stats() });
+      } catch (e) {
+        sendJson(res, { ok: false, error: e.message }, 500);
+      }
+      return;
+    }
+
     // ── RERA Import V2 (Gujarat RERA CSV/Excel → Inventory) ─────────────────
     // POST   /api/v2/rera/import/preview  { filename, fileBase64, columnMap? }
     // POST   /api/v2/rera/import/commit   { filename, fileBase64, columnMap?, needsReview? }
@@ -2465,24 +2476,44 @@ function gracefulShutdown(signal) {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-appServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`Signature Properties (frontend) running at http://0.0.0.0:${PORT}`);
-  // Install quarterly RERA scraper cron (idempotent, ok to fail silently)
+async function startServer() {
+  // ── Optional Mongo pre-boot ──────────────────────────────────────────────
   try {
-    const srcCron = path.join(ROOT, 'scripts', 'rera-refresh.cron');
-    const dstCron = '/etc/cron.d/rera-refresh';
-    if (fs.existsSync(srcCron)) {
-      const src = fs.readFileSync(srcCron, 'utf8');
-      const dst = fs.existsSync(dstCron) ? fs.readFileSync(dstCron, 'utf8') : '';
-      if (src !== dst) {
-        fs.writeFileSync(dstCron, src, { mode: 0o644 });
-        console.log('[cron] Installed /etc/cron.d/rera-refresh (quarterly RERA sync)');
-      }
+    const mongoStore = require('./src/data/mongoStore');
+    if (mongoStore.isEnabled()) {
+      const fallbackJson = path.join(ROOT, 'data', 'sig-realty-db.json');
+      const initRes = await mongoStore.initMongo(fallbackJson);
+      console.log('[mongo] init:', initRes);
+      // Now that the snapshot is loaded, seed any missing starter data.
+      try { runtime.repository.ensureStarterSeed(); } catch (_) {}
+    } else {
+      console.log('[mongo] disabled (STORAGE_MODE=' + (process.env.STORAGE_MODE || 'json') + ')');
     }
   } catch (e) {
-    console.warn('[cron] Failed to install rera-refresh cron:', e.message);
+    console.error('[mongo] init failed, falling back to JSON file:', e.message);
   }
-});
+
+  appServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`Signature Properties (frontend) running at http://0.0.0.0:${PORT}`);
+    // Install quarterly RERA scraper cron (idempotent, ok to fail silently)
+    try {
+      const srcCron = path.join(ROOT, 'scripts', 'rera-refresh.cron');
+      const dstCron = '/etc/cron.d/rera-refresh';
+      if (fs.existsSync(srcCron)) {
+        const src = fs.readFileSync(srcCron, 'utf8');
+        const dst = fs.existsSync(dstCron) ? fs.readFileSync(dstCron, 'utf8') : '';
+        if (src !== dst) {
+          fs.writeFileSync(dstCron, src, { mode: 0o644 });
+          console.log('[cron] Installed /etc/cron.d/rera-refresh (quarterly RERA sync)');
+        }
+      }
+    } catch (e) {
+      console.warn('[cron] Failed to install rera-refresh cron:', e.message);
+    }
+  });
+}
+
+startServer().catch((e) => { console.error('[startup] fatal:', e); process.exit(1); });
 
 // Additional listener for /api routes via Emergent ingress (port 8001)
 if (API_PORT && API_PORT !== PORT) {

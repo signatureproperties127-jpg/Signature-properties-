@@ -19,7 +19,33 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 11 (Sep 4, 2026)
+## What's Been Implemented — Session 12 (Sep 4, 2026)
+
+### 🔔 Follow-ups Widget (dashboard)
+- Reused existing `v2FollowUpService` (createFollowUp / listFollowUps / completeFollowUp) — no backend changes needed
+- **New widget on `/` dashboard** (`data-testid=followups-widget`): header + overdue count badge + 3 tabs (Today / Overdue / Upcoming). Default tab = Today.
+- **Row rendering**: type-icon (☎️ CALL, 💬 WHATSAPP, 🏠 VISIT, etc.) + client name (joined from ALL_LEADS) + human relative time badge ("IN 1H", "1D OVERDUE") + notes.
+- **Quick actions per row**: `tel:+<phone>` link for CALL type, `wa.me/<phone>` link for WHATSAPP type, always-visible green `✓ Done` button (calls POST `/api/v2/followups/:id/complete`).
+- **Colour coding**: red-tinted item when overdue, amber-tinted when due today, plain white for upcoming.
+- Data-testid coverage: `fu-tab-{today,overdue,upcoming}`, `fu-item-<id>`, `fu-done-<id>`, `fu-tel-<id>`, `fu-wa-<id>`, `fu-tab-overdue-btn`.
+
+### 🗄️ MongoDB Migration — P0 blocker cleared ✅
+- **New `src/data/mongoStore.js`** — snapshot-based Mongo backend. Single Mongo document `{ _id: 'singleton' }` in `signature_realty.db_snapshot` holds the entire DB payload. Async `initMongo(fallbackJson)` loads snapshot into in-memory cache before `server.listen()`; if Mongo is empty, seeds from `data/sig-realty-db.json` (one-time transparent migration). `read()` returns a deep-cloned copy of the cache; `write(db)` updates cache + enqueues an async `replaceOne` chained via `_writeQueue` so writes never race.
+- **`src/data/repository.js` minimally patched** — added `const mongoStore = require('./mongoStore')`. `ensureDatabase()` skips file bootstrap when Mongo is enabled. `read()` and `write(db)` transparently delegate to `mongoStore` when enabled + initialized. Zero changes to any downstream caller — the whole codebase keeps its synchronous API.
+- **Startup flow rewritten** in `server.js` — new `async startServer()` awaits `mongoStore.initMongo(fallbackJson)`, then invokes `runtime.repository.ensureStarterSeed()` to backfill seed collections, then binds the HTTP server. Fatal init errors log `[startup] fatal:` and exit 1.
+- **Supervisor env** — `/etc/supervisor/conf.d/realty.conf` now exports `STORAGE_MODE=mongo`, `MONGO_URL=mongodb://localhost:27017`, `MONGO_DB=signature_realty`. Fallback to JSON mode remains fully functional (`STORAGE_MODE=json` or missing env).
+- **`GET /api/v2/storage/health`** — new endpoint returns `{ enabled, initialized, cacheSize, successes, failures, lastWriteAt, lastError }` for post-deploy observability.
+- **Boot verification**: first boot logged `[mongo] init: { source: 'json-migrated', size: 435295 }`; subsequent boots log `source: 'mongo'`. Post-restart data survives.
+
+### Testing (iteration_3.json — 11/11 pass, 100% backend + 100% frontend)
+- MONGO 1-3: storage/health OK · POST `/api/leads` new row `L000011 TEST_MONGO_*` persists across `sudo supervisorctl restart realty` (total leads 195 → 196) · `[mongo] init: source=json-migrated|mongo` log confirmed
+- FU 1-3: today/overdue/upcoming presets return correct filtered rows · complete flow persists Status=COMPLETED
+- FU 4-6: dashboard widget renders with all data-testids · tab switch works · Done button removes item + refetches
+- REGRESSION: hero + stats + modules + call priority + recent activity + inventory RERA modal all still work
+
+
+
+
 
 ### RERA Import Phase 2 — Auto-scraper
 - **New service `src/services/reraPortalClient.js`** — pluggable Gujarat RERA portal client with two modes: `mock` (default, returns sample projects for dev/testing) and `live` (real HTTPS + HTML parse). Toggle via env `RERA_SCRAPER_MODE=live`. Portal URL configurable via `RERA_PORTAL_URL`. Live client is a stub that reaches the portal and can be extended with a real HTML parser without touching the runner/cron.

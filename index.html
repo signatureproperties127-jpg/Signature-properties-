@@ -132,6 +132,27 @@
     .activity-text { flex: 1; }
     .activity-time { color: var(--text-light); font-size: 11px; margin-top: 2px; }
 
+    /* Follow-up tabs */
+    .fu-tab { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: #fff; color: var(--text-light); font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s; }
+    .fu-tab:hover { border-color: var(--gold); color: var(--brown); }
+    .fu-tab.active { background: var(--brown); color: #fff; border-color: var(--brown); }
+    .fu-item { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; align-items: flex-start; margin-bottom: 6px; background: #fff; }
+    .fu-item.overdue { border-color: #fca5a5; background: #fef2f2; }
+    .fu-item.today { border-color: #fbbf24; background: #fffbeb; }
+    .fu-type-badge { flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 18px; background: var(--gold-soft); }
+    .fu-info { flex: 1; min-width: 0; }
+    .fu-title { font-weight: 700; font-size: 13.5px; color: var(--brown-dark); }
+    .fu-meta { font-size: 11.5px; color: var(--text-light); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .fu-time-badge { padding: 1px 7px; border-radius: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .fu-time-badge.red { background: #fee2e2; color: #991b1b; }
+    .fu-time-badge.amber { background: #fef3c7; color: #78350f; }
+    .fu-time-badge.blue { background: #dbeafe; color: #1e40af; }
+    .fu-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .fu-btn { padding: 5px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 11px; font-weight: 700; }
+    .fu-btn.done { background: #16a34a; color: #fff; }
+    .fu-btn.done:hover { background: #15803d; }
+    .fu-btn.snooze { background: #fef3c7; color: #78350f; }
+
     /* Floating call FAB (mobile only) */
     .fab-call { display: none; }
     @media (max-width: 700px) {
@@ -261,6 +282,20 @@
     <div class="call-list" id="call-preview">
       <div class="loader">Loading call priorities...</div>
     </div>
+  </div>
+
+  <!-- Follow-ups Widget -->
+  <div class="card" data-testid="followups-widget">
+    <div class="card-h">
+      <h3>🔔 Follow-ups <span class="count" id="fu-count"></span></h3>
+      <button class="link" onclick="switchFuTab('overdue')" data-testid="fu-switch-overdue" id="fu-tab-overdue-btn">⚠️ Overdue</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px" id="fu-tabs">
+      <button class="fu-tab active" data-tab="today" onclick="switchFuTab('today')" data-testid="fu-tab-today">📅 Today</button>
+      <button class="fu-tab" data-tab="overdue" onclick="switchFuTab('overdue')" data-testid="fu-tab-overdue">⚠️ Overdue</button>
+      <button class="fu-tab" data-tab="upcoming" onclick="switchFuTab('upcoming')" data-testid="fu-tab-upcoming">🕐 Upcoming</button>
+    </div>
+    <div id="fu-list"><div class="loader">Loading follow-ups...</div></div>
   </div>
 
   <!-- Recent activity -->
@@ -478,6 +513,98 @@
       : '<div class="empty">Koi call-worthy lead nahi mila.</div>';
   }
 
+  // ── Follow-ups widget ───────────────────────────────────────────────────
+  let CURRENT_FU_TAB = 'today';
+  const FU_TYPE_ICON = { CALL: '☎️', WHATSAPP: '💬', EMAIL: '📧', VISIT: '🏠', 'SITE VISIT': '🏠', MEETING: '🤝', DOCUMENT: '📄', OTHER: '⭐' };
+
+  function leadNameById(leadId) {
+    const l = ALL_LEADS.find(x => x.LeadID === leadId);
+    return l?.ClientName || leadId;
+  }
+  function leadPhoneById(leadId) {
+    const l = ALL_LEADS.find(x => x.LeadID === leadId);
+    return digits(l?.PrimaryMobile);
+  }
+
+  function relTime(iso) {
+    if (!iso) return '—';
+    const t = new Date(iso).getTime();
+    const now = Date.now();
+    const diff = t - now;
+    const abs = Math.abs(diff);
+    const s = abs / 1000;
+    let str;
+    if (s < 60) str = 'now';
+    else if (s < 3600) str = Math.floor(s / 60) + 'm';
+    else if (s < 86400) str = Math.floor(s / 3600) + 'h';
+    else str = Math.floor(s / 86400) + 'd';
+    return diff < 0 ? `${str} overdue` : `in ${str}`;
+  }
+
+  function switchFuTab(tab) {
+    CURRENT_FU_TAB = tab;
+    document.querySelectorAll('.fu-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    loadFollowUps();
+  }
+
+  async function loadFollowUps() {
+    const wrap = $('fu-list');
+    wrap.innerHTML = '<div class="loader">Loading follow-ups...</div>';
+    const r = await jget(`/api/v2/followups?preset=${encodeURIComponent(CURRENT_FU_TAB)}&limit=20`);
+    if (!r?.ok) { wrap.innerHTML = `<div class="empty">Error: ${esc(r?.error || 'Unknown')}</div>`; return; }
+    const items = Array.isArray(r.data) ? r.data : (r.data?.items || []);
+    // Update overdue badge
+    if (CURRENT_FU_TAB === 'today') {
+      const overdueRes = await jget('/api/v2/followups?preset=overdue&limit=100');
+      const overdueCount = (overdueRes?.data || []).length;
+      const btn = $('fu-tab-overdue-btn');
+      if (overdueCount) btn.innerHTML = `⚠️ ${overdueCount} Overdue`;
+    }
+    $('fu-count').textContent = items.length ? `— ${items.length}` : '';
+    if (!items.length) {
+      wrap.innerHTML = `<div class="empty">Koi ${CURRENT_FU_TAB === 'overdue' ? 'overdue' : CURRENT_FU_TAB === 'today' ? 'aaj ka' : 'aane wala'} follow-up nahi hai 🎉</div>`;
+      return;
+    }
+    wrap.innerHTML = items.map(fu => fuRow(fu)).join('');
+  }
+
+  function fuRow(fu) {
+    const isOverdue = fu.Status === 'OVERDUE' || new Date(fu.DueAt) < new Date();
+    const isToday = !isOverdue && new Date(fu.DueAt).toDateString() === new Date().toDateString();
+    const cls = isOverdue ? 'overdue' : isToday ? 'today' : '';
+    const timeBadge = isOverdue ? 'red' : isToday ? 'amber' : 'blue';
+    const type = String(fu.Type || 'CALL').toUpperCase();
+    const icon = FU_TYPE_ICON[type] || '⭐';
+    const cname = leadNameById(fu.LeadID);
+    const cphone = leadPhoneById(fu.LeadID);
+    const telHref = cphone ? `tel:+${cphone}` : '#';
+    const waHref = cphone ? `https://wa.me/${cphone}` : '#';
+    return `<div class="fu-item ${cls}" data-testid="fu-item-${esc(fu.FollowUpID)}">
+      <div class="fu-type-badge">${icon}</div>
+      <div class="fu-info">
+        <div class="fu-title">${esc(cname)} <span style="color:var(--text-light);font-weight:500;font-size:11.5px">— ${esc(type)}</span></div>
+        <div class="fu-meta">
+          <span class="fu-time-badge ${timeBadge}">${esc(relTime(fu.DueAt))}</span>
+          <span>${esc(new Date(fu.DueAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }))}</span>
+          ${fu.Notes ? `<span style="color:var(--text-light)">· ${esc(fu.Notes)}</span>` : ''}
+        </div>
+      </div>
+      <div class="fu-actions">
+        ${cphone && type === 'WHATSAPP' ? `<a class="fu-btn snooze" href="${waHref}" target="_blank" rel="noopener" data-testid="fu-wa-${esc(fu.FollowUpID)}">💬</a>` : ''}
+        ${cphone && type === 'CALL' ? `<a class="fu-btn snooze" href="${telHref}" data-testid="fu-tel-${esc(fu.FollowUpID)}">📞</a>` : ''}
+        <button class="fu-btn done" onclick="completeFu('${esc(fu.FollowUpID)}')" data-testid="fu-done-${esc(fu.FollowUpID)}">✓ Done</button>
+      </div>
+    </div>`;
+  }
+
+  async function completeFu(fuId) {
+    try {
+      const r = await fetch(`/api/v2/followups/${encodeURIComponent(fuId)}/complete`, { method: 'POST' }).then(r => r.json());
+      if (!r.ok) throw new Error(r.error);
+      await loadFollowUps();
+    } catch (e) { alert('Complete failed: ' + e.message); }
+  }
+
   async function boot() {
     // Fire all in parallel
     const [leadsRes, invRes] = await Promise.all([
@@ -493,6 +620,7 @@
     renderStats();
     renderCallPreview();
     renderActivity();
+    loadFollowUps();
     // Fire non-blocking secondary
     loadDupsCount();
     loadReqsCount();

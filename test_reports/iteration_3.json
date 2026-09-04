@@ -1,0 +1,32 @@
+{
+  "summary": "Verified P0 MongoDB snapshot migration (STORAGE_MODE=mongo) and Follow-ups dashboard widget end-to-end. All 11 requested checks pass: storage/health ok, data survives supervisorctl restart, [mongo] init log source='mongo'/'json-migrated' (never 'fresh'), FU list presets (today/overdue/upcoming) all correct, FU complete flow persists, dashboard widget renders with all data-testids, tab switching works, tel: quick link works, Done button removes item and refetches, and regressions (dashboard sections + /inventory RERA modal) all still pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_details": {
+    "MONGO_1_storage_health": "GET /api/v2/storage/health -> {ok:true, enabled:true, initialized:true, cacheSize:439705, successes:0, failures:0} PASS",
+    "MONGO_2_persistence": "Created L000011 (TEST_MONGO_1788538707) -> sudo supervisorctl restart realty -> lead present after restart, total=196 PASS",
+    "MONGO_3_startup_log": "/var/log/supervisor/realty.out.log contains '[mongo] init: { ok: true, source: json-migrated ... }' and subsequent '[mongo] init: { ok: true, source: mongo ... }' PASS",
+    "FU_1_today": "GET /api/v2/followups?preset=today returned 1 PENDING item for LEAD-0001 (WHATSAPP) PASS",
+    "FU_2_overdue": "GET ?preset=overdue returned 1 item Status=OVERDUE (CALL, LEAD-0001) PASS",
+    "FU_3_complete": "POST /complete on FU-1788538197304-7 -> Status=COMPLETED; GET verifies persistence PASS",
+    "FU_4_widget": "followups-widget visible with header 'Follow-ups', 3 tabs (fu-tab-today/overdue/upcoming), badge '#fu-tab-overdue-btn' = '⚠️ 1 Overdue', 1 fu-item rendered with type badge ☎️/CALL, time badge 'in 1h', and green '✓ Done' button PASS",
+    "FU_5_tab_switch": "Overdue tab -> 1 red-tinted item (class='fu-item overdue'), tel link fu-tel-<id> href='tel:+919876543210'. Upcoming tab loads 1 item PASS",
+    "FU_6_done_action": "Clicked fu-done-<id>; item disappeared (today items 1 -> 0); GET ?preset=today confirmed empty PASS",
+    "REGRESSION_1_dashboard": "Hero Smart Call, 4 stat tiles (196/9/5/0), 8 modules, 'Aaj Call Karo' with 4 rows, Recent Activity feed - all still present PASS",
+    "REGRESSION_2_inventory_rera": "GET /inventory 200; [data-testid=rera-section-title] present when RERA row/card clicked PASS"
+  },
+  "test_report_links": ["/app/test_reports/pytest/", "/app/test_reports/rera_backend_test.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "storage.stats().successes stays 0 across the run even though writes are persisting - metric increment on successful flush appears to not be wired. Not blocking, but review mongoStore.flush() to bump successes counter for observability.",
+    "Snapshot-based Mongo storage (single doc, cache size ~440KB) is fine for MVP scale but O(N) rewrite of full DB on every write will not scale. Fine now, revisit before >5-10 MB or heavy write concurrency.",
+    "/api/v2/followups?preset=upcoming currently includes today's pending items too (returned the same FU-...-7 that today returned). Confirm intended semantics vs 'strictly future days'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (5/5)"},
+  "test_credentials": "DEMO_MODE - auto-auth USR-0001",
+  "seed_data_creation": "Created lead L000011 (TEST_MONGO_1788538707) and follow-up FU-1788538748463-0 (CALL, LEAD-0001, today) for widget test; the follow-up was then marked COMPLETED by the UI test. Lead L000011 remains.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mongo persistence + follow-ups widget fully green. If retesting FU widget UI, first POST /api/v2/followups with a today DueAt for LEAD-0001 to guarantee a Today item is present (previous today items may already be COMPLETED). Overdue seed FU-1788538197246-6 exists on LEAD-0001. Storage stats.successes not incrementing - may be worth main agent fixing for observability."
+}

@@ -4,6 +4,7 @@ const os = require('os');
 const crypto = require('crypto');
 
 const { version: appVersion } = require('../../package.json');
+const mongoStore = require('./mongoStore');
 
 let globalIdCounter = 0;
 
@@ -29,6 +30,16 @@ class JsonRepository {
   }
 
   ensureDatabase() {
+    // Mongo mode with snapshot loaded — seed & return, no file work.
+    if (mongoStore.isEnabled() && mongoStore.isInitialized()) {
+      this.ensureStarterSeed();
+      return;
+    }
+    // Mongo enabled but not yet initialized (pre-boot phase): defer entirely.
+    // The startup script will call ensureStarterSeed() explicitly after init.
+    if (mongoStore.isEnabled()) {
+      return;
+    }
     const dir = path.dirname(this.dbFile);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -137,10 +148,17 @@ class JsonRepository {
   }
 
   read() {
+    if (mongoStore.isEnabled() && mongoStore.isInitialized()) {
+      return mongoStore.read();
+    }
     return JSON.parse(fs.readFileSync(this.dbFile, 'utf8'));
   }
 
   write(db) {
+    if (mongoStore.isEnabled() && mongoStore.isInitialized()) {
+      mongoStore.write(db);
+      return;
+    }
     // Node.js is single-threaded and all callers perform a fully synchronous
     // read → modify → write cycle with no intermediate awaits, so these
     // synchronous fs operations cannot be interleaved by another request
