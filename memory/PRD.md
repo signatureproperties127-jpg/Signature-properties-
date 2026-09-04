@@ -19,9 +19,28 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 5 (Sep 4, 2026 late)
+## What's Been Implemented — Session 6 (Sep 4, 2026 latest)
 
-### Inventory / Property Master Module
+### 3-Way Inventory Source Split (Own / Builder / Broker)
+- **New top-level field `InventorySource`** on every property = one of `Own` / `Builder` / `Broker`; auto-derived from OwnerType when missing (Builder → Builder, Sub-broker → Broker, everything else → Own)
+- **Backend**:
+  - `list()` supports `?source=Own|Builder|Broker` filter
+  - `create()` + `update()` accept `InventorySource`, `BuilderName`, `ProjectName`, `BrokerName`, `BrokerMobile`, `BrokerCommissionShare` at top-level
+  - New helper `_deriveInventorySource(ownerType)` for backfill on legacy records
+- **Frontend / `/inventory`**:
+  - **Source filter row** with 4 chips: All Sources / ⭐ My Own Inventory / 🏗️ Builder Inventory / 🤝 Broker Inventory (color-coded amber / blue / purple)
+  - **Header count bar** now shows per-source breakdown: "9 of 9 · ⭐ Own 5 · 🏗️ Builder 2 · 🤝 Broker 2"
+  - **Color-coded source badge** on top-right of every property card (Own = amber, Builder = blue, Broker = purple)
+  - **Source-aware footer**: shows Owner name for Own listings, "Broker Name • Split X%" for Broker, "Builder • Project" for Builder
+  - **Contextual form fields**: Ownership section reveals Builder Name/Project only for Builder source; Broker Name/Mobile/Commission Split only for Broker source (auto-toggle via `onSourceChange`)
+  - Auto-adjusts OwnerType dropdown when source changes (Builder → Builder OwnerType, Broker → Sub-broker OwnerType)
+- **Sample data reassigned**: 9 Surat properties now split 5 Own / 2 Builder / 2 Broker with realistic broker (Kunal Estate Agency Split 50%, Vinay Realtors Split 60%) and builder (Kamrej Developers → Kamrej Green Estate, Pandesara Infra → Signature Industrial Park) details
+- **Legacy Bengaluru duplicates cleaned** (Azure Crest test data removed from inventory)
+- **Verified end-to-end**: filter chip switches instantly, badge colors render correctly, footer copy adapts per source
+
+
+
+## What's Been Implemented — Session 5 (Sep 4, 2026 later)
 - **New service**: `src/services/inventoryService.js` — CRUD + photo upload
 - **API endpoints**:
   - `GET  /api/v2/inventory` — list with filters (q, category, subCategory, transactionType, status)
