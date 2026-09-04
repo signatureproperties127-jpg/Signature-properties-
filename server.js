@@ -252,6 +252,96 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    // ── Broker Network V2 (WhatsApp share flow) ─────────────────────────────
+    // GET    /api/v2/broker-network                          — list brokers
+    // POST   /api/v2/broker-network                          — add broker
+    // PATCH  /api/v2/broker-network/:id                      — edit
+    // DELETE /api/v2/broker-network/:id                      — remove
+    // POST   /api/v2/requirements/:reqId/network-share       — { brokerIds[], message?, expiresInDays? }
+    // GET    /api/v2/requirements/:reqId/network-shares      — list shares
+    // POST   /api/v2/network-shares/:shareId/revoke
+    // GET    /api/v2/public/req/:token                       — anonymized (NO auth)
+    // POST   /api/v2/public/req/:token/response              — submit property (NO auth)
+    if (/^\/api\/v2\/(broker-network(?:\/[^\/]+)?|requirements\/[^\/]+\/network-shares?|network-shares\/[^\/]+\/revoke|public\/req\/[^\/]+(?:\/response)?)\/?$/i.test(pathname)) {
+      const { BrokerNetworkV2Service } = require('./src/services/brokerNetworkV2Service');
+      const svc = new BrokerNetworkV2Service(runtime.repository);
+
+      // Broker registry CRUD
+      if (/^\/api\/v2\/broker-network\/?$/i.test(pathname)) {
+        if (req.method === 'GET') {
+          const active = url.searchParams.get('active');
+          const rows = svc.listBrokers({ active: active === 'true' ? true : active === 'false' ? false : undefined });
+          sendJson(res, { ok: true, data: rows, count: rows.length });
+          return;
+        }
+        if (req.method === 'POST') {
+          const out = svc.createBroker(bodyForV2 || {});
+          sendJson(res, out, out.ok ? 201 : 400);
+          return;
+        }
+      }
+      const bnById = pathname.match(/^\/api\/v2\/broker-network\/([^\/]+)\/?$/i);
+      if (bnById) {
+        if (req.method === 'PATCH') {
+          const out = svc.updateBroker(bnById[1], bodyForV2 || {});
+          sendJson(res, out, out.ok ? 200 : 404);
+          return;
+        }
+        if (req.method === 'DELETE') {
+          const out = svc.deleteBroker(bnById[1]);
+          sendJson(res, out, out.ok ? 200 : 404);
+          return;
+        }
+      }
+
+      // Share create
+      const shareCreate = pathname.match(/^\/api\/v2\/requirements\/([^\/]+)\/network-share\/?$/i);
+      if (shareCreate && req.method === 'POST') {
+        const body = bodyForV2 || {};
+        const out = svc.share(shareCreate[1], {
+          brokerIds: Array.isArray(body.brokerIds) ? body.brokerIds : [],
+          message: body.message || '',
+          expiresInDays: Number(body.expiresInDays) || 30,
+          userId: (getAuthenticatedActor(req, url)?.userId) || 'system'
+        });
+        sendJson(res, out, out.ok ? 201 : 400);
+        return;
+      }
+
+      // List shares for a requirement
+      const shareList = pathname.match(/^\/api\/v2\/requirements\/([^\/]+)\/network-shares\/?$/i);
+      if (shareList && req.method === 'GET') {
+        const rows = svc.listSharesByRequirement(shareList[1]);
+        sendJson(res, { ok: true, data: rows, count: rows.length });
+        return;
+      }
+
+      // Revoke
+      const shareRevoke = pathname.match(/^\/api\/v2\/network-shares\/([^\/]+)\/revoke\/?$/i);
+      if (shareRevoke && req.method === 'POST') {
+        const out = svc.revokeShare(shareRevoke[1]);
+        sendJson(res, out, out.ok ? 200 : 404);
+        return;
+      }
+
+      // Public token endpoints (NO auth)
+      const pubGet = pathname.match(/^\/api\/v2\/public\/req\/([^\/]+)\/?$/i);
+      if (pubGet && req.method === 'GET') {
+        const out = svc.getPublicShareByToken(pubGet[1]);
+        sendJson(res, out, out.ok ? 200 : 404);
+        return;
+      }
+      const pubPost = pathname.match(/^\/api\/v2\/public\/req\/([^\/]+)\/response\/?$/i);
+      if (pubPost && req.method === 'POST') {
+        const out = svc.submitResponse(pubPost[1], bodyForV2 || {});
+        sendJson(res, out, out.ok ? 201 : 400);
+        return;
+      }
+
+      sendJson(res, { ok: false, error: 'Method not supported' }, 405);
+      return;
+    }
+
     // ── Storage health (Mongo migration observability) ──────────────────────
     if (pathname === '/api/v2/storage/health' && req.method === 'GET') {
       try {
@@ -2405,10 +2495,12 @@ appServer = http.createServer(async (req, res) => {
     '/duplicates':          '/duplicates.html',
     '/inventory':           '/inventory.html',
     '/property-workspace':  '/property-workspace.html',
-    '/rera-import':         '/rera-import.html'
+    '/rera-import':         '/rera-import.html',
+    '/broker-network':      '/broker-network.html'
   };
 
   let filePath = url.pathname === '/' ? '/index.html'
+    : /^\/share\/req\/[A-Za-z0-9_-]+\/?$/.test(url.pathname) ? '/share-req.html'
     : (V2_ROUTES[url.pathname] || url.pathname);
 
   filePath = path.normalize(filePath).replace(/^\.\.[\/\\]/, '');

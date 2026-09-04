@@ -691,6 +691,29 @@
   </div>
 </div>
 
+<!-- Broker Network Share Modal -->
+<div id="net-share-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:310;align-items:center;justify-content:center;padding:12px" data-testid="net-share-modal">
+  <div style="background:#fff;border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.35)">
+    <div style="background:#5c3317;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-radius:12px 12px 0 0">
+      <div style="font-weight:800;font-size:16px">👥 Share with Broker Network</div>
+      <button onclick="closeNetworkShareModal()" data-testid="net-close" style="background:transparent;border:none;color:#fff;font-size:22px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:16px 20px">
+      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#78350f">🔒 Client ke naam, phone, aur email brokers ko <b>NAHI</b> dikhenge. Sirf requirement specs (BHK, budget, location, timeline) share honge.</div>
+      <div style="font-size:12px;font-weight:700;color:var(--clr-brown);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Select Brokers</div>
+      <div id="net-broker-list" style="max-height:280px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--clr-border);border-radius:8px;padding:6px">Loading...</div>
+      <div style="font-size:12px;font-weight:700;color:var(--clr-brown);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Optional Message</div>
+      <textarea id="net-message" rows="2" placeholder="e.g. Urgent - client this week finalize karega" style="width:100%;padding:8px;border:1px solid var(--clr-border);border-radius:8px;font-family:inherit;font-size:13px;margin-bottom:12px"></textarea>
+      <div id="net-links-out" style="display:none;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#166534"></div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--clr-border);text-align:right;background:#fdf8ec;border-radius:0 0 12px 12px">
+      <a href="/broker-network" target="_blank" style="color:var(--clr-brown);font-size:12.5px;font-weight:600;margin-right:12px;text-decoration:none">+ Manage Brokers</a>
+      <button class="need-action-btn ghost" onclick="closeNetworkShareModal()">Close</button>
+      <button class="need-action-btn primary" data-testid="net-send" onclick="sendNetworkShare()" style="background:#5c3317;color:#fff">📤 Send via WhatsApp</button>
+    </div>
+  </div>
+</div>
+
 <div id="schedule-visit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center" data-testid="schedule-visit-modal">
   <div style="background:#fff;border-radius:12px;padding:0;width:min(560px,92vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.3)">
     <div style="padding:16px 20px;border-bottom:1px solid var(--clr-border);display:flex;justify-content:space-between;align-items:center;background:#0f766e;color:#fff;border-radius:12px 12px 0 0">
@@ -1011,6 +1034,7 @@
         <button class="need-action-btn primary" data-testid="req-update-${esc(reqId)}" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update</button>
         <button class="need-action-btn ghost"   data-testid="req-matches-${esc(reqId)}" onclick="toggleSmartMatches('${esc(reqId)}')">🎯 Smart Match</button>
         <button class="need-action-btn ghost"   data-testid="req-shortlist-${esc(reqId)}" onclick="toggleShortlist('${esc(reqId)}')">⭐ Shortlist</button>
+        <button class="need-action-btn ghost"   data-testid="req-share-${esc(reqId)}" onclick="openNetworkShareModal('${esc(reqId)}')">👥 Share with Network</button>
         <button class="need-action-btn ghost"   onclick="openSiteVisitsContext('${esc(reqId)}')">🏠 Site Visits</button>
         <button class="need-action-btn ghost"   onclick="showNextQuestionsSection('${esc(reqId)}')">💬 Ask</button>
         <button class="need-action-btn danger"  onclick="markLostReq('${esc(reqId)}')">✗ Lost</button>
@@ -2306,6 +2330,61 @@
     } catch (e) {
       alert('Note save failed: ' + e.message);
     }
+  }
+
+  // ── Broker Network Share ─────────────────────────────────────────────────
+  let NET_CURRENT_REQ = null;
+  async function openNetworkShareModal(reqId) {
+    NET_CURRENT_REQ = reqId;
+    document.getElementById('net-share-modal').style.display = 'flex';
+    document.getElementById('net-links-out').style.display = 'none';
+    document.getElementById('net-message').value = '';
+    const wrap = document.getElementById('net-broker-list');
+    wrap.innerHTML = 'Loading brokers...';
+    try {
+      const r = await fetch('/api/v2/broker-network?active=true').then(r => r.json());
+      if (!r.ok) throw new Error(r.error);
+      const brokers = r.data || [];
+      if (!brokers.length) {
+        wrap.innerHTML = '<div style="padding:14px;text-align:center;color:#6b7280;font-size:12.5px">Koi broker abhi network me nahi hai. <a href="/broker-network" target="_blank" style="color:var(--clr-brown);font-weight:600">+ Add brokers</a> pehle.</div>';
+        return;
+      }
+      wrap.innerHTML = brokers.map(b => `<label style="display:flex;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--clr-border);cursor:pointer">
+        <input type="checkbox" class="net-broker-cb" value="${esc(b.NetworkBrokerID)}" data-testid="net-cb-${esc(b.NetworkBrokerID)}" data-name="${esc(b.Name)}" data-phone="${esc(b.Phone)}" checked />
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px">${esc(b.Name)} <span style="color:#6b7280;font-weight:500;font-size:11.5px">· ${esc(b.Phone)}</span></div>
+          <div style="font-size:11px;color:#6b7280">${esc(b.Agency||'—')} · Trust: ${esc(b.TrustLevel)} ${(b.Specializations||[]).slice(0,3).map(s => `<span style="background:#fef3c7;padding:1px 6px;border-radius:6px;margin-left:3px">${esc(s)}</span>`).join('')}</div>
+        </div>
+      </label>`).join('');
+    } catch (e) { wrap.innerHTML = `<div style="color:var(--clr-danger);padding:14px">Error: ${esc(e.message)}</div>`; }
+  }
+  function closeNetworkShareModal() { document.getElementById('net-share-modal').style.display = 'none'; }
+
+  async function sendNetworkShare() {
+    const boxes = document.querySelectorAll('.net-broker-cb:checked');
+    if (!boxes.length) { alert('Kam se kam ek broker select karo'); return; }
+    const brokerIds = Array.from(boxes).map(b => b.value);
+    const message = document.getElementById('net-message').value.trim();
+    try {
+      const r = await fetch(`/api/v2/requirements/${encodeURIComponent(NET_CURRENT_REQ)}/network-share`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brokerIds, message, expiresInDays: 30 })
+      }).then(r => r.json());
+      if (!r.ok) throw new Error(r.error);
+      const shares = r.data.shares || [];
+      const base = location.origin;
+      const links = shares.map(s => {
+        const phone = String(s.BrokerPhone || '').replace(/\D/g, '');
+        const url = `${base}/share/req/${s.Token}`;
+        const text = encodeURIComponent(`🏘️ Signature Property\n\nHi ${s.BrokerName}, ek client ke liye property chahiye — details is secure link me hain (client ki koi PII nahi hai):\n\n${url}\n\nAgar matching maal ho to link kholke submit karo. 🙏`);
+        return { name: s.BrokerName, phone, url, waUrl: phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}` };
+      });
+      const listHtml = links.map(l => `<div style="margin-top:6px"><b>${esc(l.name)}</b> — <a href="${l.waUrl}" target="_blank" style="color:#166534;font-weight:700">📱 Send WhatsApp →</a></div>`).join('');
+      const out = document.getElementById('net-links-out');
+      out.style.display = 'block';
+      out.innerHTML = `<b>✅ ${shares.length} share link${shares.length>1?'s':''} created.</b> Har broker ko WhatsApp me bhejne ke liye click karo:${listHtml}`;
+      if (links[0]) window.open(links[0].waUrl, '_blank', 'noopener');
+    } catch (e) { alert('Share failed: ' + e.message); }
   }
 
   // ── WhatsApp Share (Shortlist) ───────────────────────────────────────────

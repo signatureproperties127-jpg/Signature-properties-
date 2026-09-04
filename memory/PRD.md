@@ -19,7 +19,26 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 12 (Sep 4, 2026)
+## What's Been Implemented — Session 13 (Sep 4, 2026)
+
+### 👥 Broker Network V2 (PII-safe reverse-inventory workflow)
+- **New service `src/services/brokerNetworkV2Service.js`** — CRUD for broker registry + WhatsApp share lifecycle + anonymized public views + response submission → auto-Inventory + auto-Shortlist. Legacy `brokerNetworkService.legacy.js` preserved and still wired.
+- **API endpoints (all under /api/v2)**:
+  - `GET/POST /broker-network` + `PATCH/DELETE /broker-network/:id` — trusted broker CRUD (Name, Phone, Agency, TrustLevel, Specializations[], Notes, Active). Phone-digits dedup.
+  - `POST /requirements/:reqId/network-share` `{ brokerIds[], message?, expiresInDays? }` — generates one unique base64url token per broker; returns share rows with BrokerName/BrokerPhone/Token.
+  - `GET /requirements/:reqId/network-shares` — sender-side share list.
+  - `POST /network-shares/:shareId/revoke` — mark Revoked.
+  - **`GET /api/v2/public/req/:token` — NO AUTH** — anonymized whitelisted requirement fields ONLY (Category/SubCategory/TransactionType/Location1/2/BHK/BudgetMin/Max/Carpet/Furnishing/Purpose/Timeline/ReadyToMove/Amenities). PII leak check confirmed by testing agent (no LeadID/ClientName/Phone/Email).
+  - **`POST /api/v2/public/req/:token/response` — NO AUTH** — submits property → creates Inventory row with `InventorySource='NetworkSubmission'` + `SubmittedByBrokerID`/`SubmittedByBrokerName`/`SubmittedByBrokerPhone`/`NetworkShareID`/`NetworkResponseID`/`ExpectedCommissionSplit`/`Availability` + auto-creates Shortlist entry linking Requirement → Property with `NetworkSubmission=true` and `[Network]` note prefix.
+- **New pages**:
+  - `/broker-network` (admin CRUD) — table with Name/Phone/Agency/Trust/Specialization + Add/Edit/Delete
+  - `/share/req/<token>` (public, mobile-first) — hero greeting to broker + privacy banner + anonymized spec grid + rich structured property form (Title, BHK, CarpetArea, Society, Location, Price, Rate, Floor, Furnishing, Availability, ExpectedSplit, Photos URLs, VideoUrl, Amenities, Notes) + success screen with Response ID
+- **Client Workspace integration**: new `👥 Share with Network` button (`req-share-<reqId>`) on every requirement card footer. Opens modal with broker checkboxes (loaded from `/api/v2/broker-network?active=true`), optional message field, and Send button that (1) POSTs `network-share`, (2) builds WhatsApp deep-links per broker with pre-filled invite text + secure link, (3) auto-opens first WhatsApp link and shows per-broker send buttons for the rest.
+- **Testing (iteration_4.json)**: **100% backend (15/15) + 100% frontend (BN6-BN8) + PII leak check PASSED + 4 regressions clean**. Zero critical bugs.
+
+
+
+
 
 ### 🔔 Follow-ups Widget (dashboard)
 - Reused existing `v2FollowUpService` (createFollowUp / listFollowUps / completeFollowUp) — no backend changes needed
