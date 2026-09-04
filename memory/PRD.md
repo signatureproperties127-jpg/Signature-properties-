@@ -19,10 +19,39 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 1 (Sep 4, 2026)
+## What's Been Implemented — Session 2 (Sep 4, 2026 continued)
 
-### Environment Setup
-- Modified `server.js` to bind to both port 3000 and 8001 (`API_PORT` env)
+### Track A: Full Category Depth (86 new fields)
+- `scripts/seedFullCategoryFields.js` — comprehensive V2FieldConfig seed
+- **Residential** (16 fields): PlotArea, BuiltUpArea, Garden, SwimmingPool, ServantQuarter, BoundaryWall, Balconies, Bathrooms, AgeOfProperty, OwnershipType, LoanApproved, KitchenType, PGSharingType, etc.
+- **Commercial** (33 fields): FurnishingType (Bare/Semi/Fully/Plug-and-Play), FloorNumber, Lift, ParkingCarSlots, PowerLoadKVA, ACType, CeilingHeightComm; Office: Cabins, Workstations, MeetingRooms, ConferenceRoom, Reception, Pantry, ServerRoom, NatureOfBusiness; Shop: FrontageWidth, Depth, FacadeType, Mezzanine, Footfall; Warehouse: LoadingBay, TruckAccess, FloorLoadCapacity; Showroom: DisplayWindow, StorageBackroom
+- **Industrial** (15 fields): GIDCApproval, IndustryZone (GIDC Sachin/Palsana/Hojiwala/Pandesara/Ichhapore), PowerLoadHP, ETP, BoilerAllowed, IndustryType, WaterConnection, CraneAvailable, LabourQuarter, ColdChambers, TempRange
+- **Land** (18 fields): LandAreaUnit (with Vigha for Gujarat), RatePerVigha, RatePerSqYard, LandZoning, TPScheme, NAOrder, FSI, BuildingPermission; Agricultural: SoilType, WaterSource, ExistingCrops, IrrigationType, FarmHouse
+- **Common** (4 fields): Purpose, ClientType (Individual/HUF/Pvt Ltd/NRI), GujaratRERA, Priority
+- Total V2FieldConfig entries: **154** (up from 61)
+
+### Track C: Google Sheets Real-time Sync (Live)
+- **Endpoint**: `POST /api/sync/google-sheet` (X-Sync-Token auth)
+- **Setup helper**: `GET /api/sync/google-sheet/setup` returns webhook URL + token
+- **Service**: `src/services/googleSheetSyncService.js` — column-map based ETL
+  - 40 sheet columns → V2 model mapping (Lead / Transaction / Requirement)
+  - Indian budget parsing: "2Cr" → 20000000, "40000" → 40000, "1.3" → 13000000, "2L" → 200000
+  - Phone normalisation for dup matching
+  - Status mapping: Telecalling/Verified/Lost/Call Not Received → CRM statuses
+  - Legacy sheet IDs preserved as LegacyID + used as LeadID when creating new
+- **Apps Script**: `scripts/apps-script-webhook.gs` — user pastes in their sheet's Extensions → Apps Script
+  - `onEdit` trigger (simple) — every cell edit syncs the row
+  - `onSheetChange` installable trigger (via `installTriggers()`)  — catches inserts
+  - `syncAllRows()` — one-time full backfill
+- **Live import result**: **190 real leads** imported from user's actual sheet
+  - Comm tab: 79 rows
+  - Sale tab: 79 rows
+  - Rent tab: 32 rows
+- Sync token env: `SHEET_SYNC_TOKEN` (defaults to dev-mode if unset)
+
+
+
+## What's Been Implemented — Session 1 (Sep 4, 2026 earlier)
 - Created `/etc/supervisor/conf.d/realty.conf` — runs Node app under supervisor
 - Added `DEMO_MODE` bypass in `authService.js` — auto-login as ADMIN without Google OAuth
 - Fixed missing `CompanyID`/`BrokerageID` on seeded Users

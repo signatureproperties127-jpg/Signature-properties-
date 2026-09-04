@@ -190,6 +190,45 @@ async function handleApi(req, res, url) {
       try { bodyForV2 = await readJsonOnce(req); } catch(_) { bodyForV2 = {}; }
     }
 
+    // ── Google Sheet Sync Webhook ────────────────────────────────────────────
+    if (/^\/api\/sync\/google-sheet\/?$/i.test(pathname) && req.method === 'POST') {
+      const { GoogleSheetSyncService } = require('./src/services/googleSheetSyncService');
+      const svc = new GoogleSheetSyncService(runtime.repository);
+      const token = req.headers['x-sync-token'] || req.headers['X-Sync-Token'] || '';
+      if (!svc.verifyToken(token)) {
+        sendJson(res, { ok: false, error: 'Invalid sync token' }, 401);
+        return;
+      }
+      const body = bodyForV2 || {};
+      const tab  = String(body.tab || '').trim();
+      const rows = Array.isArray(body.rows) ? body.rows : (body.row ? [body.row] : []);
+      if (!tab || !rows.length) {
+        sendJson(res, { ok: false, error: 'tab + rows[] required' }, 400);
+        return;
+      }
+      const results = await svc.syncRows(tab, rows);
+      const created = results.filter(r => r.action === 'CREATED').length;
+      const updated = results.filter(r => r.action === 'UPDATED').length;
+      const failed  = results.filter(r => !r.ok).length;
+      sendJson(res, { ok: true, tab, summary: { created, updated, failed, total: results.length }, results }, 200);
+      return;
+    }
+
+    // ── Simple sheet setup instructions endpoint ─────────────────────────────
+    if (/^\/api\/sync\/google-sheet\/setup\/?$/i.test(pathname) && req.method === 'GET') {
+      const appUrl = String(process.env.APP_URL || '').trim() || `http://localhost:${process.env.PORT || 3000}`;
+      const syncToken = String(process.env.SHEET_SYNC_TOKEN || 'CHANGE_ME_SECRET');
+      sendJson(res, {
+        ok: true,
+        data: {
+          webhookUrl: `${appUrl}/api/sync/google-sheet`,
+          syncToken,
+          instructions: 'Copy /app/scripts/apps-script-webhook.gs code and paste in your Google Sheet Extensions → Apps Script'
+        }
+      });
+      return;
+    }
+
     const v2Result = await v2Router.handle(req, res, url, bodyForV2);
     if (v2Result && v2Result.handled) {
       sendJson(res, v2Result.body, v2Result.statusCode || 200);
