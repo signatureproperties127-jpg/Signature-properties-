@@ -19,9 +19,28 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 6 (Sep 4, 2026 latest)
+## What's Been Implemented — Session 7 (Sep 4, 2026 latest)
 
-### 3-Way Inventory Source Split (Own / Builder / Broker)
+### Smart Match V2 (Requirement → Inventory)
+- **New `src/services/smartMatchService.js`** — V2-aware matching engine
+  - Understands both `Fields.<key>.value` wrapping and flat requirement fields
+  - Hard filters: Category, SubCategory (soft), TransactionType with alias set (Purchase ↔ Sale ↔ Rent+Sale; Rent ↔ Lease)
+  - Weighted scoring (out of 100): Category 15, SubCategory 10, Location 20, Budget 25, Rate/sqft 10, Size (BHK/carpet) 10, Furnishing 5, Sub-cat specifics 5
+  - Levels: 85+ Excellent / 65+ Strong / 45+ Possible / <45 Weak (hidden by default)
+  - Sub-category specifics: Office matches Cabins+Workstations, Shop matches Frontage
+  - Excludes Sold / Rented properties automatically
+- **API**: `GET /api/v2/requirements/:id/matches?limit=10&minScore=40`
+  - Returns criteria (for debug), scanned count, total matches, and top-N matches with `Score`, `MatchLevel`, and per-criterion `Breakdown` array
+- **UI in Client Workspace**:
+  - Every requirement card now has a **🎯 Smart Match** button (replaces old "Matching" navigate-away link)
+  - Click expands an inline panel with header "🎯 Smart Matches — X of Y properties match"
+  - Each match card shows: photo thumb, source badge (⭐/🏗️/🤝 color-coded), title, sub-cat + location + society + price, score with colour-coded level (green Excellent → orange Possible), and green pills for matched criteria + red pills for misses
+  - Loaded lazily on click (dataset.loaded flag prevents refetch)
+- **Verified end-to-end**: Sneha Trivedi's Villa/Vesu ₹2.5-4Cr requirement scored PROP-0003 Dumas Road villa 60/Possible with "Within budget ₹3.50 Cr ✓", "4 BHK ✓" green + "Location mismatch ✓" red
+
+
+
+## What's Been Implemented — Session 6 (Sep 4, 2026 late)
 - **New top-level field `InventorySource`** on every property = one of `Own` / `Builder` / `Broker`; auto-derived from OwnerType when missing (Builder → Builder, Sub-broker → Broker, everything else → Own)
 - **Backend**:
   - `list()` supports `?source=Own|Builder|Broker` filter

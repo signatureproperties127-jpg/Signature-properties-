@@ -947,11 +947,17 @@
           <div class="next-qs-title">💡 Next Questions to Ask</div>
           <div id="nq-content-${esc(reqId)}" class="next-qs-loading">Loading…</div>
         </div>
+
+        <!-- Smart Matches — loaded async -->
+        <div id="mm-${esc(reqId)}" class="smart-matches" style="display:none;margin-top:12px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid var(--clr-border)">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--clr-brown);margin-bottom:8px" id="mm-title-${esc(reqId)}">🎯 Smart Matches</div>
+          <div id="mm-content-${esc(reqId)}" style="font-size:12.5px;color:#6b7280">Loading…</div>
+        </div>
       </div>
 
       <div class="need-card-footer">
-        <button class="need-action-btn primary" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update</button>
-        <button class="need-action-btn ghost"   onclick="openMatchingContext('${esc(reqId)}')">📊 Matching</button>
+        <button class="need-action-btn primary" data-testid="req-update-${esc(reqId)}" onclick="openUpdateNeedModal('${esc(reqId)}')">✏️ Update</button>
+        <button class="need-action-btn ghost"   data-testid="req-matches-${esc(reqId)}" onclick="toggleSmartMatches('${esc(reqId)}')">🎯 Smart Match</button>
         <button class="need-action-btn ghost"   onclick="openSiteVisitsContext('${esc(reqId)}')">🏠 Site Visits</button>
         <button class="need-action-btn ghost"   onclick="showNextQuestionsSection('${esc(reqId)}')">💬 Ask</button>
         <button class="need-action-btn danger"  onclick="markLostReq('${esc(reqId)}')">✗ Lost</button>
@@ -2006,6 +2012,72 @@
     // Navigate to global matching module; store context for potential future filtering
     try { sessionStorage.setItem('matchingContext', JSON.stringify({ leadId: LEAD_ID, reqId })); } catch(_) {}
     window.location.href = '/?module=matching';
+  }
+
+  // ── Smart Match — inline expansion showing top inventory matches ─────────
+  async function toggleSmartMatches(reqId) {
+    const wrap    = document.getElementById(`mm-${reqId}`);
+    const content = document.getElementById(`mm-content-${reqId}`);
+    const title   = document.getElementById(`mm-title-${reqId}`);
+    if (!wrap) return;
+    // Toggle visibility if already loaded
+    if (wrap.style.display !== 'none' && wrap.dataset.loaded === '1') { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    content.innerHTML = '<span style="color:#6b7280">Scanning inventory…</span>';
+    try {
+      const res = await fetch(`/api/v2/requirements/${encodeURIComponent(reqId)}/matches?limit=10&minScore=40`).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'Failed');
+      const { total, scanned, matches } = res.data;
+      title.innerHTML = `🎯 Smart Matches <span style="color:#6b7280;font-weight:500;text-transform:none;letter-spacing:0">— ${total} of ${scanned} properties match</span>`;
+      if (!matches.length) {
+        content.innerHTML = `<div style="padding:20px;text-align:center;color:#6b7280">No matching properties in inventory yet. <a href="/inventory" style="color:var(--clr-brown);font-weight:600">Add one →</a></div>`;
+      } else {
+        content.innerHTML = matches.map(mm => smartMatchCard(mm, reqId)).join('');
+      }
+      wrap.dataset.loaded = '1';
+    } catch(e) {
+      content.innerHTML = `<div style="color:var(--clr-danger)">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function smartMatchCard(m, reqId) {
+    const photo = (m.Photos || [])[0]?.url;
+    const price = fmtInrShort(m.AskingPrice, m.ListingFor);
+    const src   = m.InventorySource || 'Own';
+    const srcColor = src === 'Builder' ? '#2563eb' : src === 'Broker' ? '#7c3aed' : '#d97706';
+    const srcLabel = src === 'Builder' ? '🏗️ Builder' : src === 'Broker' ? '🤝 Broker' : '⭐ Own';
+    const levelColor = m.MatchLevel === 'Excellent' ? '#16a34a' : m.MatchLevel === 'Strong' ? '#0284c7' : m.MatchLevel === 'Possible' ? '#d97706' : '#94a3b8';
+    const facts = (m.Breakdown || []).filter(b => b.v > 0).slice(0, 4).map(b => `<span style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 7px;border-radius:10px;font-weight:600">${esc(b.note)}</span>`).join(' ');
+    const misses = (m.Breakdown || []).filter(b => b.v === 0).slice(0, 2).map(b => `<span style="font-size:11px;background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:10px;font-weight:600">${esc(b.note)}</span>`).join(' ');
+    return `<div class="mm-card" data-testid="mm-card-${esc(m.PropertyID)}" style="display:flex;gap:12px;padding:10px;background:#fff;border-radius:8px;border:1px solid var(--clr-border);margin-bottom:8px;align-items:flex-start">
+      <div style="flex-shrink:0;width:96px;height:80px;background:#f4ede0;border-radius:6px;overflow:hidden;position:relative">
+        ${photo ? `<img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover" />` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:24px">📷</div>'}
+        <span style="position:absolute;top:2px;right:2px;background:${srcColor};color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-weight:700">${srcLabel}</span>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div style="font-weight:700;font-size:13.5px;color:var(--clr-brown);line-height:1.3">
+            <a href="/inventory" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()">${esc(m.Title || '—')}</a>
+          </div>
+          <div style="text-align:center;flex-shrink:0">
+            <div style="font-weight:800;font-size:15px;color:${levelColor}" data-testid="mm-score-${esc(m.PropertyID)}">${m.Score}</div>
+            <div style="font-size:9px;color:${levelColor};font-weight:700;text-transform:uppercase">${esc(m.MatchLevel)}</div>
+          </div>
+        </div>
+        <div style="font-size:11.5px;color:#6b7280;margin:3px 0">${esc(m.SubCategory || '')} • ${esc(m.Location1 || '—')}${m.SocietyName ? ' • ' + esc(m.SocietyName) : ''} • ${esc(price)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${facts}${misses}</div>
+      </div>
+    </div>`;
+  }
+
+  function fmtInrShort(n, forType) {
+    if (n == null || n === '') return '—';
+    n = Number(n);
+    const rentTypes = ['Rent','Lease','Rent + Sale'];
+    if (rentTypes.includes(forType)) return '₹' + n.toLocaleString('en-IN') + '/mo';
+    if (n >= 1e7) return '₹' + (n/1e7).toFixed(2) + ' Cr';
+    if (n >= 1e5) return '₹' + (n/1e5).toFixed(1) + ' L';
+    return '₹' + n.toLocaleString('en-IN');
   }
 
   function openSiteVisitsContext(reqId) {

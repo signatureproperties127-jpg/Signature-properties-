@@ -190,6 +190,21 @@ async function handleApi(req, res, url) {
       try { bodyForV2 = await readJsonOnce(req); } catch(_) { bodyForV2 = {}; }
     }
 
+    // ── Smart Match V2 (dynamic scoring against inventory) ──────────────────
+    // GET /api/v2/requirements/:id/matches?limit=10&minScore=40
+    const matchV2 = pathname.match(/^\/api\/v2\/requirements\/([^\/]+)\/matches\/?$/i);
+    if (matchV2 && req.method === 'GET') {
+      const { SmartMatchService } = require('./src/services/smartMatchService');
+      const svc = new SmartMatchService(runtime.repository);
+      const opts = {
+        limit:    Number(url.searchParams.get('limit')) || 20,
+        minScore: url.searchParams.get('minScore') != null ? Number(url.searchParams.get('minScore')) : 40
+      };
+      const out = svc.matchByRequirementId(matchV2[1], opts);
+      sendJson(res, out, out.ok ? 200 : 404);
+      return;
+    }
+
     // ── Inventory / Property APIs ────────────────────────────────────────────
     const invMatch = pathname.match(/^\/api\/v2\/inventory(?:\/([^\/]+))?(?:\/(photos|photos\/[^\/]+))?\/?$/i);
     if (invMatch) {
