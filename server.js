@@ -258,7 +258,11 @@ async function handleApi(req, res, url) {
     // GET    /api/v2/rera/import/history?limit=20
     // GET    /api/v2/rera/config
     // PATCH  /api/v2/rera/config          { areas: [...] }
-    if (/^\/api\/v2\/rera\/(import\/(preview|commit|history)|config)\/?$/i.test(pathname)) {
+    // POST   /api/v2/rera/scraper/run     { }              — trigger scraper now
+    // GET    /api/v2/rera/scraper/runs?limit=20
+    // GET    /api/v2/rera/scraper/runs/:runId
+    // POST   /api/v2/rera/reverse-match   { propertyIds: [...] }  — waiting clients per property
+    if (/^\/api\/v2\/rera\/(import\/(preview|commit|history)|config|scraper\/(run|runs(?:\/[^\/]+)?)|reverse-match)\/?$/i.test(pathname)) {
       const { ReraImportService } = require('./src/services/reraImportService');
       const { loadConfig, saveAreas } = require('./src/services/reraConfig');
       const svc = new ReraImportService(runtime.repository);
@@ -281,6 +285,50 @@ async function handleApi(req, res, url) {
           return;
         }
         sendJson(res, { ok: false, error: 'Method not supported' }, 405);
+        return;
+      }
+
+      // Scraper endpoints
+      if (/^\/api\/v2\/rera\/scraper\/run\/?$/i.test(pathname)) {
+        if (req.method !== 'POST') { sendJson(res, { ok: false, error: 'Method not supported' }, 405); return; }
+        const { ReraScraperService } = require('./src/services/reraScraperService');
+        const scraper = new ReraScraperService(runtime.repository);
+        scraper.run({
+          triggeredBy: (bodyForV2 && bodyForV2.triggeredBy) || 'manual',
+          userId: (getAuthenticatedActor(req, url)?.userId) || 'system'
+        }).then((out) => {
+          sendJson(res, out, out.ok ? 200 : 500);
+        }).catch((e) => sendJson(res, { ok: false, error: e.message }, 500));
+        return;
+      }
+      const scraperGetById = pathname.match(/^\/api\/v2\/rera\/scraper\/runs\/([^\/]+)\/?$/i);
+      if (scraperGetById && req.method === 'GET') {
+        const { ReraScraperService } = require('./src/services/reraScraperService');
+        const scraper = new ReraScraperService(runtime.repository);
+        const out = scraper.getRun(scraperGetById[1]);
+        sendJson(res, out, out.ok ? 200 : 404);
+        return;
+      }
+      if (/^\/api\/v2\/rera\/scraper\/runs\/?$/i.test(pathname) && req.method === 'GET') {
+        const { ReraScraperService } = require('./src/services/reraScraperService');
+        const scraper = new ReraScraperService(runtime.repository);
+        const limit = Number(url.searchParams.get('limit')) || 20;
+        sendJson(res, scraper.listRuns(limit));
+        return;
+      }
+
+      // Reverse match
+      if (/^\/api\/v2\/rera\/reverse-match\/?$/i.test(pathname)) {
+        if (req.method !== 'POST') { sendJson(res, { ok: false, error: 'Method not supported' }, 405); return; }
+        const { ReverseMatchService } = require('./src/services/reverseMatchService');
+        const rev = new ReverseMatchService(runtime.repository);
+        const body = bodyForV2 || {};
+        const ids = Array.isArray(body.propertyIds) ? body.propertyIds : [];
+        const out = rev.matchProperties(ids, {
+          minScore: Number(body.minScore) || 45,
+          perPropertyLimit: Number(body.perPropertyLimit) || 10
+        });
+        sendJson(res, out, out.ok ? 200 : 400);
         return;
       }
 
@@ -2419,6 +2467,21 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 appServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Signature Properties (frontend) running at http://0.0.0.0:${PORT}`);
+  // Install quarterly RERA scraper cron (idempotent, ok to fail silently)
+  try {
+    const srcCron = path.join(ROOT, 'scripts', 'rera-refresh.cron');
+    const dstCron = '/etc/cron.d/rera-refresh';
+    if (fs.existsSync(srcCron)) {
+      const src = fs.readFileSync(srcCron, 'utf8');
+      const dst = fs.existsSync(dstCron) ? fs.readFileSync(dstCron, 'utf8') : '';
+      if (src !== dst) {
+        fs.writeFileSync(dstCron, src, { mode: 0o644 });
+        console.log('[cron] Installed /etc/cron.d/rera-refresh (quarterly RERA sync)');
+      }
+    }
+  } catch (e) {
+    console.warn('[cron] Failed to install rera-refresh cron:', e.message);
+  }
 });
 
 // Additional listener for /api routes via Emergent ingress (port 8001)

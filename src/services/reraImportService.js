@@ -314,11 +314,17 @@ class ReraImportService {
         updatedIds.push(existing.PropertyID);
       } else {
         const propertyId = this.repo.createId('PROP');
+        // RERA projects are ~99% flats/apartments. Default SubCategory=Flat so
+        // SmartMatch and reverse match can find them. Copy first config → BHK.
+        const firstCfg = (agg.Configurations || [])[0];
+        const bhkMatch = firstCfg ? firstCfg.match(/^(\d+(?:\.\d+)?)/) : null;
+        const bhkValue = bhkMatch ? bhkMatch[1] + ' BHK' : null;
         const row = {
           PropertyID: propertyId,
           Title: `${agg.ProjectName || 'Untitled Project'} — ${agg.BuilderName || 'Unknown Builder'}`,
           Category: 'Residential',
-          SubCategory: null,
+          SubCategory: 'Flat',
+          BHK: bhkValue,
           ListingFor: 'Sale',
           ListingStatus: 'Available',
           Status: null,
@@ -335,6 +341,7 @@ class ReraImportService {
           Configurations: agg.Configurations,
           TotalUnits: agg.TotalUnits || null,
           AreaRange: agg.AreaRange,
+          CarpetArea: agg.AreaRange ? agg.AreaRange.min : null,
           PossessionDate: agg.PossessionDate,
           LandArea: agg.LandArea,
           RERARegistrationDate: agg.RERARegistrationDate,

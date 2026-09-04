@@ -50,7 +50,11 @@ class ShortlistServiceV2 {
       InventorySource: prop.InventorySource || null,
       ListingFor: prop.ListingFor || null,
       Status: prop.Status || null,
-      PhotoUrl: (prop.Photos && prop.Photos[0]?.url) || null
+      PhotoUrl: (prop.Photos && prop.Photos[0]?.url) || null,
+      IsReraMaster: !!prop.IsReraMaster,
+      RERANumber: prop.RERANumber || null,
+      ProjectName: prop.ProjectName || null,
+      BuilderName: prop.BuilderName || null
     };
   }
 

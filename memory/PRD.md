@@ -19,7 +19,34 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 10 (Sep 4, 2026)
+## What's Been Implemented — Session 11 (Sep 4, 2026)
+
+### RERA Import Phase 2 — Auto-scraper
+- **New service `src/services/reraPortalClient.js`** — pluggable Gujarat RERA portal client with two modes: `mock` (default, returns sample projects for dev/testing) and `live` (real HTTPS + HTML parse). Toggle via env `RERA_SCRAPER_MODE=live`. Portal URL configurable via `RERA_PORTAL_URL`. Live client is a stub that reaches the portal and can be extended with a real HTML parser without touching the runner/cron.
+- **New service `src/services/reraScraperService.js`** — per-area job runner: single portal fetch → client-side bucketing by target area → separate commit per area (throttled 2.5s between areas, configurable via `RERA_SCRAPER_THROTTLE_MS`). A single-area failure doesn't block others. Every commit uses `needsReview=true` so new rows land with the 🆕 Pending Review flag. Full run record stored in `_ReraScrapeRuns` (last 50).
+- **API endpoints**:
+  - `POST /api/v2/rera/scraper/run` `{ triggeredBy? }` — sync trigger, returns full run record with per-area breakdown
+  - `GET  /api/v2/rera/scraper/runs?limit=20` — recent runs
+  - `GET  /api/v2/rera/scraper/runs/:runId` — single run detail
+- **System cron `/etc/cron.d/rera-refresh`** — source at `/app/scripts/rera-refresh.cron`, auto-installed on server startup (`app.listen` writes it if missing/changed). Schedule: `0 3 1 1,4,7,10 *` = quarterly at 03:00 IST on 1st of Jan/Apr/Jul/Oct.
+- **Import service update**: Now auto-sets `SubCategory='Flat'` and `BHK` (derived from first Configuration, e.g. "3BHK" → "3 BHK") + `CarpetArea` (from AreaRange.min) on every RERA row. This lets SmartMatch + Reverse Match score them properly.
+- **UI in `/rera-import.html`**: New **🔄 Auto Scraper** card between Upload and Preview sections. "Run Scraper Now" button (manual trigger) + Scraper Runs table showing RunID / Started / Mode (mock/live badge) / Status / Fetched / Inserted / Updated / Trigger / Per-Area chips (e.g. `Vesu 1  Adajan 1  Pal 1  Piplod 1  Athwa 0  Citylight 1`).
+
+### Reverse Match — surface waiting clients on new RERA import
+- **New service `src/services/reverseMatchService.js`** — for a list of PropertyIDs, iterate every ACTIVE requirement (skips Lost/Closed/Deal stages), run SmartMatch scoring, filter matches down to the requested properties. Returns `{ [propertyId]: [ { RequirementID, LeadID, ClientName, ClientPhone, Category, SubCategory, TransactionType, Score, MatchLevel, MatchedOn[] } ] }` sorted by score desc, capped 10 per property.
+- **API endpoint** `POST /api/v2/rera/reverse-match  { propertyIds:[], minScore?=45, perPropertyLimit?=10 }`.
+- **UI trigger — Option A only** (per user request): After both CSV commit and scraper run, if any rows were inserted, `showReverseMatches(insertedIds)` fires. If any property matches ≥1 client, a purple modal opens: "🎯 Waiting Clients Matched — 2 waiting clients match 2 newly-imported properties". Each match card shows: ClientName + LeadID, matched criteria (green-tick fields), Score + Level pill, **Open →** button linking to `/client-workspace?id=<LeadID>` (opens new tab). Silent (no modal) when zero matches so no interruption.
+- **Verified end-to-end**: Fresh scraper run inserts 5 mock RERA projects (Ratnakar/Sunrise/Amber/Palm/Meadows), reverse-match immediately shows Hitesh Shah (L000002 · Flat/Adajan · Score 55/Possible) for Sunrise Skyline and Neha Sanghvi (L000007 · Flat/Pal · Score 45/Possible) for Green Meadows.
+
+### WhatsApp Share (Shortlist compare view)
+- **New button** on Shortlist panel in `client-workspace.html` — green `📱 WhatsApp Share` next to the teal Schedule Site Visit button.
+- **Formatting** (Option B — detailed): `🏠 *Signature Property* — Shortlist for *ClientName*` header, per-property `*N. Title* / 📍 Location • Society / 💰 Price @ Rate/sqft / 🏘 BHK · CarpetArea · Furnishing / 🏗️ RERA: PR/GJ/… (only if IsReraMaster) / 📝 Notes (if any)`, followed by call-to-action + broker sign-off.
+- **Deep link**: `https://wa.me/<clientPhone>?text=<encoded>` — auto-fills client phone from lead (falls back to no-recipient share picker). Opens in new tab via `window.open`.
+- **Shortlist snapshot enriched**: `shortlistServiceV2._propertySnapshot()` now also includes `IsReraMaster`, `RERANumber`, `ProjectName`, `BuilderName` so the WhatsApp message can include RERA registration when applicable.
+
+
+
+
 
 ### RERA Import Module — Phase 1 (Gujarat RERA CSV/Excel → Inventory)
 - **New service `src/services/reraConfig.js`** — target areas (default: Vesu, Adajan, Pal, Piplod, Athwa, Citylight) stored in `_ReraConfig` collection (runtime editable), RERA regex (`/^PR\/GJ\/SURAT\/[^/]+\/[^/]+\/[A-Z]{2,4}\d{4,7}\/\d{6}$/i`), status normalization map (hardcoded — Ongoing/New/Completed/Lapsed), area fuzzy match (`normalizeArea()` strips spaces/hyphens/underscores so "City Light"="Citylight"="city-light").

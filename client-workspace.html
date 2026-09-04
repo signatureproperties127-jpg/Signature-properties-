@@ -2182,7 +2182,8 @@
         </td>`).join('')}
       </tr>`;
     content.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
+        <button data-testid="sl-whatsapp-${esc(reqId)}" onclick="shareShortlistOnWhatsApp('${esc(reqId)}')" style="background:#25d366;color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">📱 WhatsApp Share</button>
         <button data-testid="sv-schedule-${esc(reqId)}" onclick="openScheduleVisitModal('${esc(reqId)}')" style="background:#0f766e;color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">🏠 Schedule Site Visit</button>
       </div>
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
@@ -2305,6 +2306,49 @@
     } catch (e) {
       alert('Note save failed: ' + e.message);
     }
+  }
+
+  // ── WhatsApp Share (Shortlist) ───────────────────────────────────────────
+  function shareShortlistOnWhatsApp(reqId) {
+    const rows = (workspace._shortlist || {})[reqId] || [];
+    if (!rows.length) { alert('Shortlist khali hai — pehle kuch add karo'); return; }
+    const client = workspace?.lead || {};
+    const clientName = client.ClientName || client.Name || 'Client';
+    const clientPhone = String(client.PrimaryMobile || client.Phone || '').replace(/\D/g, '');
+    const brokerName  = (workspace?.agent?.Name) || 'Signature Property';
+
+    const lines = [];
+    lines.push(`🏠 *Signature Property* — Shortlist for *${clientName}*`);
+    lines.push('');
+    rows.forEach((r, i) => {
+      const p = r.Property || {};
+      const price = fmtInrShort(p.AskingPrice, p.ListingFor);
+      const rate = p.AskingRatePerSqFt ? ` @ ₹${Number(p.AskingRatePerSqFt).toLocaleString('en-IN')}/sqft` : '';
+      lines.push(`*${i + 1}. ${p.Title || r.PropertyID}*`);
+      const loc = [p.Location1, p.SocietyName].filter(Boolean).join(' • ');
+      if (loc) lines.push(`   📍 ${loc}`);
+      if (p.AskingPrice) lines.push(`   💰 ${price}${rate}`);
+      const specs = [];
+      if (p.BHK) specs.push(p.BHK);
+      if (p.CarpetArea) specs.push(`${p.CarpetArea} sqft carpet`);
+      if (p.FurnishingType) specs.push(p.FurnishingType);
+      if (specs.length) lines.push(`   🏘 ${specs.join(' · ')}`);
+      // RERA info if available
+      if (p.IsReraMaster && p.RERANumber) {
+        lines.push(`   🏗️ RERA: ${p.RERANumber}`);
+      }
+      if (r.Notes) lines.push(`   📝 ${r.Notes}`);
+      lines.push('');
+    });
+    lines.push(`Chalo dekh lete hain — call/visit karne ke liye reply karo 🙏`);
+    lines.push('');
+    lines.push(`— ${brokerName}`);
+
+    const text = lines.join('\n');
+    const url = clientPhone
+      ? `https://wa.me/${clientPhone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener');
   }
 
   function smartMatchCard(m, reqId) {

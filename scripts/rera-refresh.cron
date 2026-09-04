@@ -1,0 +1,4 @@
+# Quarterly Gujarat RERA scraper — runs at 03:00 on the 1st of Jan/Apr/Jul/Oct.
+# Hits the local API which uses the pluggable portal client (mock or live).
+# Installed automatically to /etc/cron.d/rera-refresh at server startup.
+0 3 1 1,4,7,10 * root curl -s -X POST http://127.0.0.1:8001/api/v2/rera/scraper/run -H 'Content-Type: application/json' -d '{"triggeredBy":"cron-quarterly"}' >> /var/log/rera-scraper.log 2>&1

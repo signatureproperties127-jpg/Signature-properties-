@@ -116,6 +116,18 @@
     </div>
   </div>
 
+  <!-- Scraper (Phase 2) -->
+  <div class="card">
+    <div class="card-title">🔄 Auto Scraper — Gujarat RERA Portal</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="font-size:12.5px;color:var(--clr-text-light);max-width:640px;line-height:1.5">
+        Runs quarterly (1st of Jan / Apr / Jul / Oct @ 03:00) via system cron. Fetches all Surat district projects, buckets by target area, and inserts new rows with <b>Needs Review</b> flag. You can also trigger it manually.
+      </div>
+      <button class="btn btn-accent" onclick="runScraper()" id="scraper-btn" data-testid="scraper-run-btn">🔄 Run Scraper Now</button>
+    </div>
+    <div id="scraper-runs" style="margin-top:14px;overflow-x:auto"><table id="scraper-table"></table></div>
+  </div>
+
   <!-- Preview / Result -->
   <div class="card" id="preview-card" style="display:none" data-testid="preview-card">
     <div class="card-title" id="preview-title">Preview Summary</div>
@@ -154,6 +166,20 @@
   </div>
 </div>
 
+<!-- Reverse Match Modal — 🎯 waiting clients after commit -->
+<div id="rev-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;align-items:center;justify-content:center" data-testid="rev-modal">
+  <div style="background:#fff;border-radius:12px;width:min(720px,94vw);max-height:88vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.35)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--clr-border);display:flex;justify-content:space-between;align-items:center;background:#4c1d95;color:#fff;border-radius:12px 12px 0 0">
+      <div style="font-size:16px;font-weight:800">🎯 Waiting Clients Matched</div>
+      <button onclick="closeRevModal()" style="background:transparent;border:none;color:#fff;font-size:22px;cursor:pointer" data-testid="rev-modal-close">×</button>
+    </div>
+    <div id="rev-body" style="padding:16px 20px;font-size:13px;color:var(--clr-text)"></div>
+    <div style="padding:12px 20px;border-top:1px solid var(--clr-border);text-align:right">
+      <button class="btn btn-ghost" onclick="closeRevModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let selectedFile = null;
   let lastPreview  = null;
@@ -163,6 +189,7 @@
     setupDrop();
     loadConfig();
     loadHistory();
+    loadScraperRuns();
   });
 
   // ── Areas config ─────────────────────────────────────────────────────────
@@ -289,6 +316,9 @@
       if (!res.ok) throw new Error(res.error);
       renderCommitResult(res.data);
       await loadHistory();
+      // Reverse match — surface waiting clients for newly inserted rows
+      const insertedIds = res.data.InsertedPropertyIDs || [];
+      if (insertedIds.length) await showReverseMatches(insertedIds);
     } catch (e) {
       alert('Import failed: ' + e.message);
     } finally {
@@ -296,6 +326,100 @@
       btn.textContent = needsReview ? '🆕 Import as "Needs Review"' : '✅ Import Now';
     }
   }
+
+  // ── Scraper (Phase 2) ────────────────────────────────────────────────────
+  async function runScraper() {
+    const btn = document.getElementById('scraper-btn');
+    if (!confirm('Run RERA scraper now? This fetches all Surat district projects and applies target-area filter.')) return;
+    btn.disabled = true; btn.textContent = '⏳ Running scraper...';
+    try {
+      const res = await fetch('/api/v2/rera/scraper/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ triggeredBy: 'manual' })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      await loadScraperRuns();
+      await loadHistory();
+      alert(`Scraper ${res.data.Status} — Inserted: ${res.data.TotalInserted}, Updated: ${res.data.TotalUpdated}, Fetched: ${res.data.TotalRowsFetched}`);
+      // Surface reverse match for newly inserted rows
+      const insertedIds = res.data.InsertedPropertyIDs || [];
+      if (insertedIds.length) await showReverseMatches(insertedIds);
+    } catch (e) {
+      alert('Scraper failed: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = '🔄 Run Scraper Now';
+    }
+  }
+
+  async function loadScraperRuns() {
+    try {
+      const res = await fetch('/api/v2/rera/scraper/runs?limit=10').then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      const rows = res.data || [];
+      const tbl = document.getElementById('scraper-table');
+      if (!rows.length) {
+        tbl.innerHTML = '<tbody><tr><td style="text-align:center;color:var(--clr-text-light);padding:20px">No scraper runs yet.</td></tr></tbody>';
+        return;
+      }
+      tbl.innerHTML = `
+        <thead><tr><th>Run ID</th><th>Started</th><th>Mode</th><th>Status</th><th>Fetched</th><th>Inserted</th><th>Updated</th><th>Trigger</th><th>Per Area</th></tr></thead>
+        <tbody data-testid="scraper-tbody">${rows.map(r => `<tr>
+          <td style="font-family:'Courier New',monospace;font-size:11px">${escapeHtml(r.RunID)}</td>
+          <td>${escapeHtml((r.StartedAt || '').replace('T', ' ').slice(0, 16))}</td>
+          <td><span class="badge ${r.FetchMode === 'live' ? 'badge-ok' : 'badge-warn'}">${escapeHtml(r.FetchMode || r.Mode || '?')}</span></td>
+          <td><span class="badge ${r.Status === 'OK' ? 'badge-ok' : r.Status === 'PARTIAL' ? 'badge-warn' : 'badge-err'}">${escapeHtml(r.Status)}</span></td>
+          <td>${r.TotalRowsFetched || 0}</td>
+          <td><b style="color:var(--clr-success)">${r.TotalInserted}</b></td>
+          <td><b style="color:#0369a1">${r.TotalUpdated}</b></td>
+          <td>${escapeHtml(r.TriggeredBy || '—')}</td>
+          <td style="font-size:11px">${(r.Areas || []).map(a => `<span class="badge ${a.Status === 'OK' ? 'badge-ok' : 'badge-err'}" title="${escapeHtml(a.Area)} — ${a.Inserted}i/${a.Updated}u">${escapeHtml(a.Area)} ${a.Inserted + a.Updated}</span>`).join(' ')}</td>
+        </tr>`).join('')}</tbody>`;
+    } catch (e) {
+      document.getElementById('scraper-table').innerHTML = `<tbody><tr><td style="color:var(--clr-danger)">Load failed: ${escapeHtml(e.message)}</td></tr></tbody>`;
+    }
+  }
+
+  // ── Reverse Match ────────────────────────────────────────────────────────
+  async function showReverseMatches(propertyIds) {
+    try {
+      const res = await fetch('/api/v2/rera/reverse-match', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyIds, minScore: 45 })
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      const map = res.data || {};
+      const withMatches = Object.entries(map).filter(([, arr]) => arr.length > 0);
+      const totalClients = withMatches.reduce((n, [, arr]) => n + arr.length, 0);
+      if (!totalClients) return; // silent when zero matches — no interruption
+
+      const body = document.getElementById('rev-body');
+      body.innerHTML = `
+        <div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#4c1d95">
+          <b>${totalClients} waiting client${totalClients === 1 ? '' : 's'}</b> match ${withMatches.length} newly-imported propert${withMatches.length === 1 ? 'y' : 'ies'}. Reach out before someone else does!
+        </div>
+        ${withMatches.map(([pid, list]) => `
+          <div style="margin-bottom:16px;border:1px solid var(--clr-border);border-radius:10px;padding:12px 14px">
+            <div style="font-weight:800;color:var(--clr-brown);font-size:13.5px;margin-bottom:8px" data-testid="rev-prop-${escapeHtml(pid)}">🏗️ ${escapeHtml(pid)}</div>
+            ${list.map(m => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed var(--clr-border)" data-testid="rev-match-${escapeHtml(pid)}-${escapeHtml(m.LeadID)}">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13px">${escapeHtml(m.ClientName || m.LeadID)} <span style="color:var(--clr-text-light);font-weight:500;font-size:11.5px">(${escapeHtml(m.LeadID)})</span></div>
+                <div style="font-size:11.5px;color:var(--clr-text-light);margin-top:2px">${escapeHtml(m.SubCategory || m.Category || '—')} · ${escapeHtml(m.TransactionType || '—')} · ${(m.MatchedOn || []).slice(0, 3).join(' · ')}</div>
+              </div>
+              <div style="text-align:center;flex-shrink:0">
+                <div style="font-weight:800;font-size:16px;color:${m.MatchLevel === 'Excellent' ? '#16a34a' : m.MatchLevel === 'Strong' ? '#0284c7' : '#d97706'}">${m.Score}</div>
+                <div style="font-size:9.5px;color:var(--clr-text-light);font-weight:700;text-transform:uppercase">${escapeHtml(m.MatchLevel)}</div>
+              </div>
+              <a href="/client-workspace?id=${encodeURIComponent(m.LeadID)}" target="_blank" class="btn btn-primary" style="padding:6px 12px;font-size:11.5px;text-decoration:none;flex-shrink:0" data-testid="rev-open-${escapeHtml(m.LeadID)}">Open →</a>
+            </div>`).join('')}
+          </div>
+        `).join('')}`;
+      document.getElementById('rev-modal').style.display = 'flex';
+    } catch (e) {
+      console.warn('Reverse match failed:', e);
+    }
+  }
+
+  function closeRevModal() { document.getElementById('rev-modal').style.display = 'none'; }
 
   // ── Rendering ────────────────────────────────────────────────────────────
   function renderPreview(d, isCommitted) {
