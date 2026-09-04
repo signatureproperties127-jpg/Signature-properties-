@@ -1,0 +1,19 @@
+{
+  "summary": "Verified RERA modal bug fix end-to-end. Backend: 3/3 pytest tests pass (GET returns RERA fields at top level, PATCH persists ProjectStatus/TotalUnits/PossessionDate/LandArea/NeedsReview at top level and NOT dumped into Fields.*, non-RERA rows untouched). Frontend Playwright: (1) RERA section hidden in Add Property modal - PASS, (2) hidden for non-RERA card PROP-0009 - PASS, (3) default view shows 9 non-RERA cards, RERA chip toggles to show 5 RERA cards - PASS, (4) RERA card modal shows all 11 fields correctly populated (RERANumber, RERARegistrationDate, ProjectStatus, Configurations, TotalUnits, AreaRange as 'min – max', PossessionDate, LandArea, ImportedFrom, ImportedAt, NeedsReview) - PASS, (5) editable fields (status=Completed, units=777, possession=2029-06-30, land=2222.5, needs-review toggled) persisted after save+reopen - PASS. Regression: scraper POST /api/v2/rera/scraper/run returned Status=OK with 5 updated rows in mock mode; RERA import preview endpoint working with sample CSV (4 projects detected). All acceptance criteria satisfied.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/test_reports/rera_backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "inventory.html is 822 lines - consider splitting modal/render/save logic into separate JS modules for maintainability.",
+    "saveProperty gates RERA payload on display style string comparison ('none'); a boolean flag on the property object would be more robust than DOM style probing.",
+    "openEditModal fetches via /api/v2/inventory/:id but relies on res.data.Photos; ensure list endpoint & detail endpoint field parity is guaranteed by tests."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "DEMO_MODE — auto-auth as USR-0001",
+  "seed_data_creation": "None needed; 5 RERA + 9 non-RERA rows already present.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix fully verified. Backend tests in /app/test_reports/rera_backend_test.py. Scraper mock returns 7 rows (5 updated, 1 out-of-area). Do not re-run test_patch_rera_fields_persist_top_level multiple times without cleanup — it mutates first RERA row's ProjectStatus/TotalUnits/PossessionDate/LandArea/NeedsReview values."
+}

@@ -108,7 +108,7 @@ class InventoryService {
     const keepKeys = new Set(['Photos', 'CreatedAt', 'CreatedBy', 'PropertyID', '_v2']);
     for (const [k, v] of Object.entries(payload || {})) {
       if (keepKeys.has(k)) continue;
-      if (['Title','Category','SubCategory','ListingFor','ListingStatus','InventorySource','OwnerName','OwnerMobile','OwnerType','ExclusiveWithMe','SocietyName','BuilderName','ProjectName','BrokerName','BrokerMobile','BrokerCommissionShare','Location1','Location2'].includes(k)) {
+      if (['Title','Category','SubCategory','ListingFor','ListingStatus','InventorySource','OwnerName','OwnerMobile','OwnerType','ExclusiveWithMe','SocietyName','BuilderName','ProjectName','BrokerName','BrokerMobile','BrokerCommissionShare','Location1','Location2','ProjectStatus','TotalUnits','PossessionDate','LandArea','NeedsReview','RERANumber','RERARegistrationDate','Configurations','AreaRange','Taluka','Village','BHK','CarpetArea','IsReraMaster','ImportedFrom','ImportedAt'].includes(k)) {
         p[k] = v;
       } else {
         p.Fields = p.Fields || {};

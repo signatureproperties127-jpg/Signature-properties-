@@ -248,6 +248,59 @@
         </div>
       </div>
 
+      <!-- RERA Master Details (visible only for IsReraMaster=true rows) -->
+      <div id="rera-section" style="display:none">
+        <div class="section-title" style="background:#fef3c7;padding:8px 12px;border-radius:6px;border-bottom:none;color:#78350f;margin-top:16px" data-testid="rera-section-title">🏗️ RERA Master Details</div>
+        <div class="form-grid" style="background:#fffbeb;padding:10px 12px;border:1px solid #fde68a;border-radius:6px;margin-top:-2px">
+          <div class="form-group full">
+            <label>RERA Number</label>
+            <input id="f-rera-number" data-testid="f-rera-number" type="text" readonly style="background:#fef3c7;font-family:'Courier New',monospace;font-size:12px" />
+          </div>
+          <div class="form-group">
+            <label>RERA Registration Date</label>
+            <input id="f-rera-reg-date" data-testid="f-rera-reg-date" type="text" readonly style="background:#fef3c7" />
+          </div>
+          <div class="form-group">
+            <label>Project Status</label>
+            <select id="f-rera-status" data-testid="f-rera-status">
+              <option>New</option><option>Ongoing</option><option>Completed</option><option>Lapsed</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Configurations</label>
+            <input id="f-rera-configs" data-testid="f-rera-configs" type="text" readonly placeholder="e.g. 2BHK / 3BHK" style="background:#fef3c7" />
+          </div>
+          <div class="form-group">
+            <label>Total Units</label>
+            <input id="f-rera-total-units" data-testid="f-rera-total-units" type="number" />
+          </div>
+          <div class="form-group">
+            <label>Carpet Range (sqft)</label>
+            <input id="f-rera-carpet-range" data-testid="f-rera-carpet-range" type="text" readonly placeholder="min – max" style="background:#fef3c7" />
+          </div>
+          <div class="form-group">
+            <label>Possession Date</label>
+            <input id="f-rera-possession" data-testid="f-rera-possession" type="date" />
+          </div>
+          <div class="form-group">
+            <label>Land Area (sqm)</label>
+            <input id="f-rera-land-area" data-testid="f-rera-land-area" type="number" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label>Imported From</label>
+            <input id="f-rera-imported-from" data-testid="f-rera-imported-from" type="text" readonly style="background:#fef3c7" />
+          </div>
+          <div class="form-group">
+            <label>Imported At</label>
+            <input id="f-rera-imported-at" data-testid="f-rera-imported-at" type="text" readonly style="background:#fef3c7" />
+          </div>
+          <div class="form-group full" style="display:flex;align-items:center;gap:8px;background:#e0e7ff;padding:8px 12px;border-radius:6px">
+            <input id="f-rera-needs-review" data-testid="f-rera-needs-review" type="checkbox" style="width:auto" />
+            <label style="margin:0;text-transform:none;font-size:13px;color:#3730a3;font-weight:600">🆕 Needs Review — untick after verifying data on RERA portal</label>
+          </div>
+        </div>
+      </div>
+
       <!-- Dynamic category-specific fields -->
       <div id="dynamic-fields-wrap"></div>
 
@@ -483,6 +536,7 @@
     document.getElementById('f-society').value = '';
     document.getElementById('f-location1').value = '';
     document.getElementById('f-exclusive').checked = false;
+    document.getElementById('rera-section').style.display = 'none';
     document.getElementById('dynamic-fields-wrap').innerHTML = '';
     document.getElementById('photos-strip').innerHTML = renderPhotoStrip();
     onSourceChange();
@@ -518,6 +572,24 @@
       document.getElementById('f-location1').value = p.Location1 || '';
       document.getElementById('f-exclusive').checked = !!p.ExclusiveWithMe;
       document.getElementById('photos-strip').innerHTML = renderPhotoStrip();
+      // RERA section — only for imported rows
+      const reraSection = document.getElementById('rera-section');
+      if (p.IsReraMaster === true) {
+        reraSection.style.display = 'block';
+        document.getElementById('f-rera-number').value        = p.RERANumber || '';
+        document.getElementById('f-rera-reg-date').value      = p.RERARegistrationDate || '';
+        document.getElementById('f-rera-status').value        = p.ProjectStatus || 'New';
+        document.getElementById('f-rera-configs').value       = Array.isArray(p.Configurations) ? p.Configurations.join(' / ') : (p.Configurations || '');
+        document.getElementById('f-rera-total-units').value   = p.TotalUnits || '';
+        document.getElementById('f-rera-carpet-range').value  = p.AreaRange ? `${p.AreaRange.min ?? '?'} – ${p.AreaRange.max ?? '?'}` : '';
+        document.getElementById('f-rera-possession').value    = p.PossessionDate || '';
+        document.getElementById('f-rera-land-area').value     = p.LandArea ?? '';
+        document.getElementById('f-rera-imported-from').value = p.ImportedFrom || '';
+        document.getElementById('f-rera-imported-at').value   = p.ImportedAt ? p.ImportedAt.slice(0, 16).replace('T', ' ') : '';
+        document.getElementById('f-rera-needs-review').checked = !!p.NeedsReview;
+      } else {
+        reraSection.style.display = 'none';
+      }
       onSourceChange();
       await loadDynamicFields(p.Fields || {});
       document.getElementById('prop-modal').classList.remove('hidden');
@@ -675,6 +747,15 @@
       Location1:   document.getElementById('f-location1').value.trim() || null,
       ExclusiveWithMe: document.getElementById('f-exclusive').checked
     };
+
+    // RERA Master fields (only editable if the section is visible)
+    if (document.getElementById('rera-section').style.display !== 'none') {
+      payload.ProjectStatus  = document.getElementById('f-rera-status').value || null;
+      payload.TotalUnits     = numOrNull(document.getElementById('f-rera-total-units').value);
+      payload.PossessionDate = document.getElementById('f-rera-possession').value || null;
+      payload.LandArea       = numOrNull(document.getElementById('f-rera-land-area').value);
+      payload.NeedsReview    = document.getElementById('f-rera-needs-review').checked;
+    }
 
     // Collect all dynamic fields
     document.querySelectorAll('#dynamic-fields-wrap [data-field-key]').forEach(el => {
