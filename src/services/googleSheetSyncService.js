@@ -194,7 +194,21 @@ class GoogleSheetSyncService {
     const phoneKey = normalisePhoneKey(leadData.PrimaryMobile);
     let lead = db.Leads.find(l => normalisePhoneKey(l.PrimaryMobile || l.Phone) === phoneKey);
 
+    // 3b. If no exact phone match, look for FUZZY duplicates on Name or Email
+    let dupCandidates = [];
+    if (!lead) {
+      const normalName  = _norm(leadData.ClientName);
+      const normalEmail = _norm(leadData.Email);
+      if (normalName || normalEmail) {
+        for (const l of db.Leads) {
+          if (normalName && _norm(l.ClientName) === normalName) dupCandidates.push(l.LeadID);
+          else if (normalEmail && _norm(l.Email) === normalEmail) dupCandidates.push(l.LeadID);
+        }
+      }
+    }
+
     let created = false;
+    let reviewStatus = null;
     if (!lead) {
       // Create new
       const leadId = leadData.LegacyID
@@ -215,6 +229,13 @@ class GoogleSheetSyncService {
       };
       db.Leads.push(lead);
       created = true;
+      // Flag pending review if fuzzy duplicates were found
+      if (dupCandidates.length) {
+        lead._reviewStatus  = 'PENDING_DUP_MERGE';
+        lead._dupCandidates = dupCandidates;
+        lead._reviewNote    = `Possible duplicate of ${dupCandidates.join(', ')} — same Name or Email`;
+        reviewStatus = 'PENDING_DUP_MERGE';
+      }
     }
 
     // Merge lead data (never overwrite LeadID / CreatedAt on update)
@@ -285,12 +306,19 @@ class GoogleSheetSyncService {
     return {
       ok: true,
       action: created ? 'CREATED' : 'UPDATED',
+      reviewStatus,
+      dupCandidates: dupCandidates.length ? dupCandidates : undefined,
       leadId: lead.LeadID,
       legacyId: lead.LegacyID,
       transactionId: txn.TransactionID,
       requirementId: req.RequirementID
     };
   }
+}
+
+// Helper for fuzzy dup detection
+function _norm(s) {
+  return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 module.exports = { GoogleSheetSyncService, COLUMN_MAP };

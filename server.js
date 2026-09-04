@@ -190,6 +190,93 @@ async function handleApi(req, res, url) {
       try { bodyForV2 = await readJsonOnce(req); } catch(_) { bodyForV2 = {}; }
     }
 
+    // ── Duplicate Review APIs ────────────────────────────────────────────────
+    // GET /api/v2/duplicates/pending — list all leads flagged as pending review
+    if (/^\/api\/v2\/duplicates\/pending\/?$/i.test(pathname) && req.method === 'GET') {
+      const db = runtime.repository.read();
+      const pending = (db.Leads || []).filter(l => l._reviewStatus === 'PENDING_DUP_MERGE');
+      const enriched = pending.map(p => ({
+        lead: p,
+        candidates: (p._dupCandidates || []).map(id => (db.Leads || []).find(l => l.LeadID === id)).filter(Boolean),
+        reason: p._reviewNote || 'Duplicate detected'
+      }));
+      sendJson(res, { ok: true, data: enriched, count: enriched.length });
+      return;
+    }
+
+    // POST /api/v2/duplicates/keep-separate — clear pending flag on a lead (keep as new)
+    if (/^\/api\/v2\/duplicates\/keep-separate\/?$/i.test(pathname) && req.method === 'POST') {
+      const body = bodyForV2 || {};
+      const leadId = String(body.leadId || '').trim();
+      if (!leadId) { sendJson(res, { ok: false, error: 'leadId required' }, 400); return; }
+      const db = runtime.repository.read();
+      const lead = (db.Leads || []).find(l => l.LeadID === leadId);
+      if (!lead) { sendJson(res, { ok: false, error: 'Lead not found' }, 404); return; }
+      delete lead._reviewStatus;
+      delete lead._dupCandidates;
+      delete lead._reviewNote;
+      lead.UpdatedAt = new Date().toISOString();
+      runtime.repository.write(db);
+      sendJson(res, { ok: true, action: 'KEPT_SEPARATE', leadId });
+      return;
+    }
+
+    // POST /api/v2/duplicates/merge — merge source lead INTO target lead
+    // Body: { sourceLeadId, targetLeadId, fieldOverrides: { <field>: 'source'|'target' } }
+    // Requirements/Transactions of source are reassigned to target; source lead is deleted.
+    if (/^\/api\/v2\/duplicates\/merge\/?$/i.test(pathname) && req.method === 'POST') {
+      const body = bodyForV2 || {};
+      const sourceLeadId = String(body.sourceLeadId || '').trim();
+      const targetLeadId = String(body.targetLeadId || '').trim();
+      const overrides    = body.fieldOverrides || {};
+      if (!sourceLeadId || !targetLeadId) { sendJson(res, { ok: false, error: 'sourceLeadId & targetLeadId required' }, 400); return; }
+      if (sourceLeadId === targetLeadId)  { sendJson(res, { ok: false, error: 'Cannot merge into self' }, 400); return; }
+      const db = runtime.repository.read();
+      const source = (db.Leads || []).find(l => l.LeadID === sourceLeadId);
+      const target = (db.Leads || []).find(l => l.LeadID === targetLeadId);
+      if (!source || !target) { sendJson(res, { ok: false, error: 'Lead(s) not found' }, 404); return; }
+
+      // Apply per-field overrides ('source' means take from source; default keeps target)
+      const mergeableFields = ['ClientName','PrimaryMobile','AlternateMobile','Email','WhatsApp','City','LeadSource','Notes','Tags','ClientStatus','Priority','ClientLifecycle','AssignedAgentID'];
+      for (const f of mergeableFields) {
+        const choice = overrides[f];
+        if (choice === 'source' && source[f] != null && source[f] !== '') target[f] = source[f];
+        else if (target[f] == null || target[f] === '') target[f] = source[f]; // fill blanks
+      }
+      target.UpdatedAt = new Date().toISOString();
+      target._mergedFrom = [...(target._mergedFrom || []), sourceLeadId];
+
+      // Reassign transactions + requirements
+      (db.Transactions || []).forEach(t => { if (t.LeadID === sourceLeadId) t.LeadID = targetLeadId; });
+      (db.Requirements || []).forEach(r => { if (r.LeadID === sourceLeadId) r.LeadID = targetLeadId; });
+      (db.Activities   || []).forEach(a => { if (a.LeadID === sourceLeadId) a.LeadID = targetLeadId; });
+      (db.FollowUps    || []).forEach(f => { if (f.LeadID === sourceLeadId) f.LeadID = targetLeadId; });
+
+      // Remove source lead
+      db.Leads = (db.Leads || []).filter(l => l.LeadID !== sourceLeadId);
+
+      runtime.repository.write(db);
+      sendJson(res, { ok: true, action: 'MERGED', sourceLeadId, targetLeadId });
+      return;
+    }
+
+    // DELETE /api/v2/duplicates/:leadId — hard delete a pending-review lead (was spam)
+    const delMatch = pathname.match(/^\/api\/v2\/duplicates\/([^\/]+)\/?$/i);
+    if (delMatch && req.method === 'DELETE') {
+      const leadId = decodeURIComponent(delMatch[1]);
+      const db = runtime.repository.read();
+      const lead = (db.Leads || []).find(l => l.LeadID === leadId);
+      if (!lead) { sendJson(res, { ok: false, error: 'Lead not found' }, 404); return; }
+      // Only allow delete on PENDING items to prevent accidental data loss
+      if (lead._reviewStatus !== 'PENDING_DUP_MERGE') { sendJson(res, { ok: false, error: 'Only pending-review leads can be deleted here' }, 400); return; }
+      db.Leads         = (db.Leads || []).filter(l => l.LeadID !== leadId);
+      db.Transactions  = (db.Transactions || []).filter(t => t.LeadID !== leadId);
+      db.Requirements  = (db.Requirements || []).filter(r => r.LeadID !== leadId);
+      runtime.repository.write(db);
+      sendJson(res, { ok: true, action: 'DELETED', leadId });
+      return;
+    }
+
     // ── Google Sheet Sync Webhook ────────────────────────────────────────────
     if (/^\/api\/sync\/google-sheet\/?$/i.test(pathname) && req.method === 'POST') {
       const { GoogleSheetSyncService } = require('./src/services/googleSheetSyncService');
@@ -1989,7 +2076,8 @@ appServer = http.createServer(async (req, res) => {
   const V2_ROUTES = {
     '/clients':             '/clients.html',
     '/client-workspace':    '/client-workspace.html',
-    '/requirements-view':   '/requirements-view.html'
+    '/requirements-view':   '/requirements-view.html',
+    '/duplicates':          '/duplicates.html'
   };
 
   let filePath = url.pathname === '/' ? '/index.html'

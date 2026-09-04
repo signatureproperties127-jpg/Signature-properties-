@@ -19,7 +19,28 @@
 ## Core Modules Present
 32 existing modules (Clients, Transactions, Requirements, Matching, Broker Network, etc.). Detailed inventory in chat.
 
-## What's Been Implemented — Session 2 (Sep 4, 2026 continued)
+## What's Been Implemented — Session 3 (Sep 4, 2026 continued)
+
+### Duplicate Merge UI
+- **Fuzzy dup detection** in `googleSheetSyncService._syncOneRow()`:
+  - After exact phone-match miss, checks Name (case-insensitive, whitespace-normalised) and Email
+  - If match found, still creates lead but marks `_reviewStatus: 'PENDING_DUP_MERGE'` + `_dupCandidates: [leadIds]` + `_reviewNote`
+- **APIs**:
+  - `GET  /api/v2/duplicates/pending` — enriched list (source + candidate leads + reason)
+  - `POST /api/v2/duplicates/keep-separate` — clear pending flag, keep as new client
+  - `POST /api/v2/duplicates/merge` — merge source into target with field-level overrides (source|target per field). Transactions/Requirements/Activities/Follow-ups all reassigned; source lead deleted; `_mergedFrom` tracked on target for audit
+  - `DELETE /api/v2/duplicates/:leadId` — hard delete pending-review lead (was spam)
+- **UI** — `/duplicates.html`:
+  - Card per pending lead, dropdown to switch between candidates
+  - Side-by-side grid: label / NEW (yellow) / EXISTING (green)
+  - Diff rows auto-highlighted in yellow
+  - Radio button per field to pick source or target value
+  - 3-action row: 🗑 Delete Incoming, Keep Separate, ✓ Merge into Target
+  - Toast notifications for success/error
+- **Nav integration**: clients.html topbar now has `Duplicates <badge>` with red count when items pending
+- **Verified end-to-end**: seeded 2 fuzzy dupes ("kartik" & "Prashant Missel"), merged one with field override (Email + City from source), kept the other separate — all 3 API paths pass
+
+## What's Been Implemented — Session 2 (Sep 4, 2026 mid)
 
 ### Track A: Full Category Depth (86 new fields)
 - `scripts/seedFullCategoryFields.js` — comprehensive V2FieldConfig seed
