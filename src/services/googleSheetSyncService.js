@@ -245,6 +245,9 @@ class GoogleSheetSyncService {
     }
     lead.UpdatedAt = new Date().toISOString();
     lead._source   = `GoogleSheet:${tab}`;
+    // Keep the legacy dashboard/list projection in sync with V2 fields.
+    lead.Phone = lead.PrimaryMobile || lead.Phone || '';
+    lead.LeadStatus = lead.ClientStatus || lead.LeadStatus || 'New';
     // Legacy Status → ClientStatus if not set
     if (leadData.ClientStatus && !['New','Verified','Active','Inactive','Blacklisted'].includes(leadData.ClientStatus)) {
       // Map sheet statuses (Telecalling, Call Not Received, Lost, Verified) to CRM statuses
@@ -289,6 +292,7 @@ class GoogleSheetSyncService {
         TransactionType: txn.TransactionType,
         Category: txn.Category,
         RequirementStatus: 'Active',
+        Status: 'Active',
         FormVersion: '2.0',
         CreatedAt: new Date().toISOString(),
         CreatedBy: 'GoogleSheetSync',
