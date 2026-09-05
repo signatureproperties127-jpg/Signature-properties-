@@ -355,7 +355,7 @@ class SignatureRealtyRuntime {
       ok: true,
       data: {
         totalLeads: leadCount,
-        activeLeads: (db.Leads || []).filter((lead) => ['Active', 'Verified'].includes(lead.LeadStatus || lead.leadStatus)).length,
+        activeLeads: (db.Leads || []).filter((lead) => ['Active', 'Verified'].includes(lead.LeadStatus || lead.ClientStatus || lead.leadStatus)).length,
         requirements: requirementCount,
         matches: matchCount,
         shortlists: shortlistCount,

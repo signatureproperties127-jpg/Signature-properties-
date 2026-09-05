@@ -16,7 +16,7 @@ class DashboardService {
 
     return {
       totalLeads: leads.length,
-      newLeads: leads.filter((lead) => String(lead.LeadStatus || '').toUpperCase() === 'NEW').length,
+      newLeads: leads.filter((lead) => String(lead.LeadStatus || lead.ClientStatus || '').toUpperCase() === 'NEW').length,
       followUpsDue: PLACEHOLDER_FOLLOW_UPS_DUE,
       activeRequirements,
       pipelinePulse: PLACEHOLDER_PIPELINE_PULSE,

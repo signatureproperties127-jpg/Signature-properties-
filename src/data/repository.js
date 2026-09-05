@@ -260,7 +260,11 @@ class JsonRepository {
   }
 
   listLeads() {
-    return this.list('Leads');
+    return this.list('Leads').map((lead) => ({
+      ...lead,
+      Phone: lead.Phone || lead.PrimaryMobile || '',
+      LeadStatus: lead.LeadStatus || lead.ClientStatus || 'New'
+    }));
   }
 
   readLead(leadId) {
