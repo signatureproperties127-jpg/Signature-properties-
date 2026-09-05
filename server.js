@@ -718,7 +718,7 @@ async function handleApi(req, res, url) {
 
     // ── Simple sheet setup instructions endpoint ─────────────────────────────
     if (/^\/api\/sync\/google-sheet\/setup\/?$/i.test(pathname) && req.method === 'GET') {
-      const appUrl = String(process.env.APP_URL || '').trim() || `http://localhost:${process.env.PORT || 3000}`;
+      const appUrl = String(process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || '').trim() || `http://localhost:${process.env.PORT || 3000}`;
       const syncToken = String(process.env.SHEET_SYNC_TOKEN || 'CHANGE_ME_SECRET');
       sendJson(res, {
         ok: true,
