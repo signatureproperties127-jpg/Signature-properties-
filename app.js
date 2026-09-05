@@ -125,10 +125,17 @@ async function renderDashboard() {
   const content = document.getElementById('app-content');
 
   try {
-    const response = await fetch('/api/dashboard');
-    const payload = await response.json();
+    const [dashboardResponse, leadsResponse] = await Promise.all([
+      fetch('/api/dashboard'),
+      fetch('/api/leads')
+    ]);
+    const payload = await dashboardResponse.json();
+    const leadsPayload = await leadsResponse.json();
+    if (!dashboardResponse.ok) throw new Error(payload.error || 'Dashboard request failed');
+    if (!leadsResponse.ok) throw new Error(leadsPayload.error || 'Leads request failed');
 
     const summary = payload.data || {};
+    const recentLeads = (leadsPayload.data || []).slice(-8).reverse();
     const kpiCards = [
       { label: 'Total Leads', value: summary.totalLeads || 0, delta: 'Live CRM' },
       { label: 'New Leads', value: summary.newLeads || 0, delta: 'Today' },
@@ -146,6 +153,27 @@ async function renderDashboard() {
             <div class="delta">${item.delta}</div>
           </article>
         `).join('')}
+      </section>
+
+      <section class="card-section">
+        <div class="card-header">
+          <h2>Recent Clients</h2>
+          <span class="badge green">Live CRM</span>
+        </div>
+        ${recentLeads.length ? `
+          <div class="table-wrap">
+            <table class="leads-table">
+              <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Source</th></tr></thead>
+              <tbody>${recentLeads.map((lead) => `
+                <tr>
+                  <td><strong>${lead.ClientName || lead.clientName || 'Unnamed client'}</strong></td>
+                  <td>${lead.Phone || lead.PrimaryMobile || '—'}</td>
+                  <td><span class="badge green">${lead.LeadStatus || lead.ClientStatus || 'New'}</span></td>
+                  <td>${lead.LeadSource || lead._source || '—'}</td>
+                </tr>
+              `).join('')}</tbody>
+            </table>
+          </div>` : '<div class="empty-state">No clients found yet.</div>'}
       </section>
 
       <section class="metrics-row">
