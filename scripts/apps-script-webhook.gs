@@ -27,7 +27,7 @@ const WATCHED_TABS = ['Comm', 'Sale', 'Rent'];
 /**
  * onEdit — fires whenever ANY cell is edited on ANY sheet.
  * We push the entire changed row to CRM.
- * (Simple trigger — no permission dialog needed.)
+ * This is installed as an authorized trigger by installTriggers().
  */
 function onEdit(e) {
   try {
@@ -80,8 +80,15 @@ function onSheetChange(e) {
 function installTriggers() {
   // Remove any previous triggers to avoid duplicates
   ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === 'onSheetChange') ScriptApp.deleteTrigger(t);
+    if (t.getHandlerFunction() === 'onSheetChange' || t.getHandlerFunction() === 'onEdit') {
+      ScriptApp.deleteTrigger(t);
+    }
   });
+  // Install an authorized edit trigger so UrlFetchApp can call the CRM.
+  ScriptApp.newTrigger('onEdit')
+    .forSpreadsheet(SpreadsheetApp.getActive())
+    .onEdit()
+    .create();
   // Install onChange trigger
   ScriptApp.newTrigger('onSheetChange')
     .forSpreadsheet(SpreadsheetApp.getActive())
