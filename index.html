@@ -407,7 +407,7 @@
 
   // ── Data loading ─────────────────────────────────────────────────────
   async function jget(url) {
-    try { const r = await fetch(url, { cache: 'no-store' }); return await r.json(); }
+    try { const r = await fetch(url, { cache: 'no-store', credentials: 'include' }); return await r.json(); }
     catch (e) { return { ok: false, error: e.message }; }
   }
 
@@ -611,6 +611,10 @@
       jget('/api/leads'),
       jget('/api/v2/inventory')
     ]);
+    if (leadsRes?.error === 'Unauthorized' || invRes?.error === 'Unauthorized') {
+      window.location.replace('/login');
+      return;
+    }
     if (leadsRes?.ok || Array.isArray(leadsRes?.data)) {
       ALL_LEADS = leadsRes.data || [];
     }

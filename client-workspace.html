@@ -801,8 +801,20 @@
       // Fetch V2 workspace (requirements, activities, followUps, timeline)
       // and legacy workspace (siteVisits, negotiations, deals, commissions) in parallel
       const [v2Res, legacyRes] = await Promise.all([
-        fetch(`/api/clients/${encodeURIComponent(LEAD_ID)}/workspace`).then(r => r.json()),
-        fetch(`/api/leads/${encodeURIComponent(LEAD_ID)}/workspace`).then(r => r.json()).catch(() => ({ ok: false }))
+        fetch(`/api/clients/${encodeURIComponent(LEAD_ID)}/workspace`, { credentials: 'include' }).then(async (r) => {
+          if (r.status === 401 || r.status === 403) {
+            window.location.replace('/login');
+            return { ok: false, error: 'Unauthorized' };
+          }
+          return r.json();
+        }),
+        fetch(`/api/leads/${encodeURIComponent(LEAD_ID)}/workspace`, { credentials: 'include' }).then(async (r) => {
+          if (r.status === 401 || r.status === 403) {
+            window.location.replace('/login');
+            return { ok: false };
+          }
+          return r.json();
+        }).catch(() => ({ ok: false }))
       ]);
       if (!v2Res.ok) { showError(v2Res.error || 'Client not found'); return; }
       workspace = v2Res.data;

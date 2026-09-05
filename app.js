@@ -126,8 +126,8 @@ async function renderDashboard() {
 
   try {
     const [dashboardResponse, leadsResponse] = await Promise.all([
-      fetch('/api/dashboard'),
-      fetch('/api/leads')
+      adminRequest('/api/dashboard'),
+      adminRequest('/api/leads')
     ]);
     const payload = await dashboardResponse.json();
     const leadsPayload = await leadsResponse.json();
@@ -163,13 +163,14 @@ async function renderDashboard() {
         ${recentLeads.length ? `
           <div class="table-wrap">
             <table class="leads-table">
-              <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Source</th></tr></thead>
+              <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Source</th><th>Action</th></tr></thead>
               <tbody>${recentLeads.map((lead) => `
                 <tr>
-                  <td><strong>${lead.ClientName || lead.clientName || 'Unnamed client'}</strong></td>
+                  <td><a class="client-link" href="/client-workspace?id=${encodeURIComponent(lead.LeadID || lead.leadId || '')}"><strong>${escapeHtml(lead.ClientName || lead.clientName || 'Unnamed client')}</strong></a></td>
                   <td>${lead.Phone || lead.PrimaryMobile || '—'}</td>
                   <td><span class="badge green">${lead.LeadStatus || lead.ClientStatus || 'New'}</span></td>
                   <td>${lead.LeadSource || lead._source || '—'}</td>
+                  <td><a class="btn btn-soft open-client" href="/client-workspace?id=${encodeURIComponent(lead.LeadID || lead.leadId || '')}">Open</a></td>
                 </tr>
               `).join('')}</tbody>
             </table>
