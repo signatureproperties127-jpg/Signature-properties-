@@ -122,6 +122,13 @@ function syncAllRows() {
   SpreadsheetApp.getActive().toast('Synced ' + totalSent + ' rows to CRM', 'Signature Realty', 8);
 }
 
+/**
+ * Send one safe test row — run this from the function dropdown to verify setup.
+ */
+function testCrmConnection() {
+  _postToCrm('Rent', [{ Name: 'Google Sheet Connection Test', Phone: '9999999999' }]);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function _getRowAsObject(sheet, rowIdx) {
@@ -160,6 +167,7 @@ function _getAllRowsAsObjects(sheet) {
 }
 
 function _postToCrm(tab, rows) {
+  rows = Array.isArray(rows) ? rows : [];
   const payload = { tab: tab, rows: rows };
   const options = {
     method: 'post',
@@ -170,7 +178,8 @@ function _postToCrm(tab, rows) {
   };
   try {
     const resp = UrlFetchApp.fetch(WEBHOOK_URL, options);
-    Logger.log('CRM sync response [' + tab + ' × ' + rows.length + ']: ' + resp.getResponseCode() + ' ' + resp.getContentText().substring(0, 300));
+    const responseText = resp && typeof resp.getContentText === 'function' ? resp.getContentText() : '';
+    Logger.log('CRM sync response [' + tab + ' x ' + rows.length + ']: ' + resp.getResponseCode() + ' ' + responseText.substring(0, 300));
   } catch (err) {
     Logger.log('CRM sync FAILED: ' + err.message);
   }
