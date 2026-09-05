@@ -7,8 +7,7 @@
  *    https://docs.google.com/spreadsheets/d/1nkjzrMRDCMoWFnzxxovvxu-fzILv6Li-VfBY4VLr-QI/edit
  * 2. Click:  Extensions → Apps Script
  * 3. Delete the default code and paste THIS ENTIRE FILE
- * 4. Update the two constants below (WEBHOOK_URL and SYNC_TOKEN) — get them from
- *    https://<your-crm>.preview.emergentagent.com/api/sync/google-sheet/setup
+ * 4. Update SYNC_TOKEN below if you configured SHEET_SYNC_TOKEN in Render.
  * 5. Click the "Save" (💾) icon
  * 6. Click the ▶️ Run button next to the function "installTriggers"
  *    - Grant permission when prompted (only once)
@@ -19,7 +18,7 @@
  */
 
 // ── CONFIG (update these two) ─────────────────────────────────────────
-const WEBHOOK_URL = 'https://e6961d98-7d3f-45b6-bd35-6e53a7314088.preview.emergentagent.com/api/sync/google-sheet';
+const WEBHOOK_URL = 'https://signature-properties.onrender.com/api/sync/google-sheet';
 const SYNC_TOKEN  = 'CHANGE_ME_SECRET'; // must match SHEET_SYNC_TOKEN env on CRM
 
 // ── Sheet tabs to watch ───────────────────────────────────────────────
